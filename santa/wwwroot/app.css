@@ -136,6 +136,26 @@ h1:focus { outline: none; }
 .recipient-name { font: 700 clamp(30px, 4vw, 48px)/1.15 Georgia, serif; letter-spacing: -.035em; color: var(--pine); overflow-wrap: anywhere; margin-bottom: 14px; }
 .recipient-email { overflow-wrap: anywhere; margin: 0; color: var(--muted); font-size: 14px; }
 .recipient .winter-art { width: 230px; transform: rotate(5deg); }
+.recipient-message { margin-top: 26px; padding-top: 22px; border-top: 1px dashed var(--rule); }
+.recipient-message h3 { font-size: 20px; color: var(--berry); }
+.santa-message { max-width: 900px; margin: 42px 0; border-color: var(--berry); box-shadow: 6px 6px 0 var(--berry); }
+.message-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px; max-width: 1100px; margin: 42px 0; align-items: start; }
+.message-editor { max-width: none; margin: 0; }
+.message-preview { margin-top: 30px; padding-top: 24px; border-top: 1px dashed var(--rule); }
+.markdown-content { overflow-wrap: anywhere; }
+.markdown-content img { display: block; max-width: 100%; height: auto; max-height: 600px; object-fit: contain; margin: 16px 0; border: 1px solid var(--rule); }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content h1 { font-size: 30px; margin: 24px 0 12px; }
+.markdown-content h2 { font-size: 26px; margin: 22px 0 10px; }
+.markdown-content h3, .markdown-content h4 { font-size: 21px; margin: 20px 0 9px; }
+.markdown-content ul, .markdown-content ol { margin: 0 0 20px; padding-left: 28px; }
+.markdown-content blockquote { margin: 0 0 20px; padding: 10px 18px; border-left: 4px solid var(--gold); background: #f2e5c7; }
+.markdown-content blockquote p { margin: 0; }
+.markdown-content code { padding: 2px 5px; background: #e8dfca; font-family: ui-monospace, monospace; font-size: .92em; }
+.markdown-content pre { overflow-x: auto; padding: 15px; background: var(--ink); color: var(--sheet); }
+.markdown-content pre code { padding: 0; background: transparent; color: inherit; }
+.markdown-content table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.markdown-content th, .markdown-content td { border: 1px solid var(--rule); padding: 8px 10px; text-align: left; }
 .error { border: 2px solid var(--berry); border-left-width: 7px; padding: 16px 20px; background: #f5e0d8; color: #702731; margin-bottom: 26px; overflow-wrap: anywhere; font-size: 14px; }
 .back-link { margin-top: 35px; font-size: 14px; }
 .message-panel { max-width: 640px; margin: 30px auto; padding: 40px; }
@@ -176,7 +196,7 @@ h1:focus { outline: none; }
     .mail-note { font-size: 18px; }
     .how-it-works { gap: 28px; grid-template-columns: .85fr 1.6fr; }
     .how-it-works > h2 { font-size: 32px; }
-    .dashboard, .game-workspace { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .dashboard, .game-workspace, .message-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
     .create-panel { grid-row: 1; margin-top: 8px; transform: none; }
     .draw-panel { margin-top: 0; max-width: 100%; }
     .auth-layout { grid-template-columns: minmax(0, 1fr); max-width: 460px; gap: 18px; margin-top: 0; }

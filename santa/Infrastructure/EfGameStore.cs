@@ -130,8 +130,66 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
         var recipient = await (from a in db.Assignments
             join g in db.Games on a.GameId equals g.Id
             join u in db.Users on a.ReceiverId equals u.Id
+            join p in db.Participants on new { a.GameId, AccountId = a.ReceiverId } equals new { p.GameId, p.AccountId }
             where a.GameId == id && a.GiverId == actor && g.State == "Published"
-            select new RecipientView(u.DisplayName,u.Email!)).SingleOrDefaultAsync();
-        return recipient ?? throw new GameException("assignment_unavailable",404);
+            select new { u.DisplayName, u.Email, p.SantaMessage }).SingleOrDefaultAsync();
+        if (recipient is null) throw new GameException("assignment_unavailable",404);
+        return new(recipient.DisplayName,recipient.Email!,SafeMarkdown.Render(recipient.SantaMessage));
+    }
+    public async Task<ParticipantMessageView> MyMessage(Guid actor, Guid id)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var message = await db.Participants
+            .Where(p => p.GameId == id && p.AccountId == actor)
+            .Select(p => p.SantaMessage).SingleOrDefaultAsync();
+        if (message is null) throw new GameException("not_participant",404);
+        return new(message,SafeMarkdown.Render(message));
+    }
+    public async Task SetMessage(Guid actor, Guid id, string message)
+    {
+        message = (message ?? "").Trim();
+        if (message.Length > 5000) throw new GameException("invalid_message");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        var game = await Lock(db,id);
+        if (game.State == "Closed") throw new GameException("message_closed",409);
+        var participant = await db.Participants.FindAsync(id,actor)
+            ?? throw new GameException("not_participant",403);
+        participant.SantaMessage = message;
+        await db.SaveChangesAsync(); await tx.CommitAsync();
+    }
+    public async Task<ParticipantMessageView> MyRecipientMessage(Guid actor, Guid id)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var message = await (from a in db.Assignments
+            join g in db.Games on a.GameId equals g.Id
+            where a.GameId == id && a.GiverId == actor && g.State == "Published"
+            select a.RecipientMessage).SingleOrDefaultAsync();
+        if (message is null) throw new GameException("assignment_unavailable",404);
+        return new(message,SafeMarkdown.Render(message));
+    }
+    public async Task SetRecipientMessage(Guid actor, Guid id, string message)
+    {
+        message = (message ?? "").Trim();
+        if (message.Length > 5000) throw new GameException("invalid_message");
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
+        var game = await Lock(db,id);
+        if (game.State != "Published") throw new GameException(
+            game.State == "Closed" ? "message_closed" : "message_not_published",409);
+        var assignment = await db.Assignments.FindAsync(id,actor)
+            ?? throw new GameException("not_participant",403);
+        assignment.RecipientMessage = message;
+        await db.SaveChangesAsync(); await tx.CommitAsync();
+    }
+    public async Task<ParticipantMessageView> MessageFromSanta(Guid actor, Guid id)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var message = await (from a in db.Assignments
+            join g in db.Games on a.GameId equals g.Id
+            where a.GameId == id && a.ReceiverId == actor && g.State == "Published"
+            select a.RecipientMessage).SingleOrDefaultAsync();
+        if (message is null) throw new GameException("assignment_unavailable",404);
+        return new(message,SafeMarkdown.Render(message));
     }
 }

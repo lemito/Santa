@@ -35,6 +35,7 @@ type Snapshot struct {
 
 var ErrNotFound = errors.New("not found")
 var ErrConflict = errors.New("conflict")
+var ErrForbidden = errors.New("forbidden")
 
 type Store struct{ DB *sql.DB }
 
@@ -90,7 +91,10 @@ func (s *Store) Configure(ctx context.Context, actor, id uuid.UUID, version int6
 	if e != nil {
 		return e
 	}
-	if owner != actor || state != "Draft" || v != version {
+	if owner != actor {
+		return ErrForbidden
+	}
+	if state != "Draft" || v != version {
 		return ErrConflict
 	}
 	norm := make([]string, len(emails))
@@ -168,7 +172,7 @@ func (s *Store) Capture(ctx context.Context, actor, id uuid.UUID, version int64,
 		return nil, e
 	}
 	if g.OwnerID != actor {
-		return nil, ErrConflict
+		return nil, ErrForbidden
 	}
 	var priorKey uuid.UUID
 	var priorVersion int64
@@ -276,13 +280,93 @@ func (s *Store) Close(ctx context.Context, actor, id uuid.UUID) error {
 	}
 	return nil
 }
-func (s *Store) Recipient(ctx context.Context, actor, id uuid.UUID) (string, string, error) {
-	var name, email string
-	e := s.DB.QueryRowContext(ctx, `SELECT u."DisplayName",u."Email" FROM "Assignments" a JOIN "Games" g ON g."Id"=a."GameId" JOIN "AspNetUsers" u ON u."Id"=a."ReceiverId" WHERE a."GameId"=$1 AND a."GiverId"=$2 AND g."State"='Published'`, id, actor).Scan(&name, &email)
+func (s *Store) Recipient(ctx context.Context, actor, id uuid.UUID) (string, string, string, error) {
+	var name, email, message string
+	e := s.DB.QueryRowContext(ctx, `SELECT u."DisplayName",u."Email",p."SantaMessage" FROM "Assignments" a JOIN "Games" g ON g."Id"=a."GameId" JOIN "AspNetUsers" u ON u."Id"=a."ReceiverId" JOIN "Participants" p ON p."GameId"=a."GameId" AND p."AccountId"=a."ReceiverId" WHERE a."GameId"=$1 AND a."GiverId"=$2 AND g."State"='Published'`, id, actor).Scan(&name, &email, &message)
 	if errors.Is(e, sql.ErrNoRows) {
 		e = ErrNotFound
 	}
-	return name, email, e
+	return name, email, message, e
+}
+func (s *Store) MyMessage(ctx context.Context, actor, id uuid.UUID) (string, error) {
+	var message string
+	e := s.DB.QueryRowContext(ctx, `SELECT p."SantaMessage" FROM "Participants" p JOIN "Games" g ON g."Id"=p."GameId" WHERE p."GameId"=$1 AND p."AccountId"=$2 AND g."State"<>'Closed'`, id, actor).Scan(&message)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = ErrNotFound
+	}
+	return message, e
+}
+func (s *Store) SetMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	message = strings.TrimSpace(message)
+	if len([]rune(message)) > 5000 {
+		return fmt.Errorf("invalid message")
+	}
+	tx, e := s.DB.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	var state string
+	if e = tx.QueryRowContext(ctx, `SELECT "State" FROM "Games" WHERE "Id"=$1 FOR UPDATE`, id).Scan(&state); errors.Is(e, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if e != nil {
+		return e
+	}
+	if state == "Closed" {
+		return ErrConflict
+	}
+	r, e := tx.ExecContext(ctx, `UPDATE "Participants" SET "SantaMessage"=$3 WHERE "GameId"=$1 AND "AccountId"=$2`, id, actor, message)
+	if e != nil {
+		return e
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return ErrForbidden
+	}
+	return tx.Commit()
+}
+func (s *Store) MyRecipientMessage(ctx context.Context, actor, id uuid.UUID) (string, error) {
+	var message string
+	e := s.DB.QueryRowContext(ctx, `SELECT a."RecipientMessage" FROM "Assignments" a JOIN "Games" g ON g."Id"=a."GameId" WHERE a."GameId"=$1 AND a."GiverId"=$2 AND g."State"='Published'`, id, actor).Scan(&message)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = ErrNotFound
+	}
+	return message, e
+}
+func (s *Store) SetRecipientMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	message = strings.TrimSpace(message)
+	if len([]rune(message)) > 5000 {
+		return fmt.Errorf("invalid message")
+	}
+	tx, e := s.DB.BeginTx(ctx, nil)
+	if e != nil {
+		return e
+	}
+	defer tx.Rollback()
+	var state string
+	if e = tx.QueryRowContext(ctx, `SELECT "State" FROM "Games" WHERE "Id"=$1 FOR UPDATE`, id).Scan(&state); errors.Is(e, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if e != nil {
+		return e
+	}
+	if state != "Published" {
+		return ErrConflict
+	}
+	r, e := tx.ExecContext(ctx, `UPDATE "Assignments" SET "RecipientMessage"=$3 WHERE "GameId"=$1 AND "GiverId"=$2`, id, actor, message)
+	if e != nil {
+		return e
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return ErrForbidden
+	}
+	return tx.Commit()
+}
+func (s *Store) MessageFromSanta(ctx context.Context, actor, id uuid.UUID) (string, error) {
+	var message string
+	e := s.DB.QueryRowContext(ctx, `SELECT a."RecipientMessage" FROM "Assignments" a JOIN "Games" g ON g."Id"=a."GameId" WHERE a."GameId"=$1 AND a."ReceiverId"=$2 AND g."State"='Published'`, id, actor).Scan(&message)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = ErrNotFound
+	}
+	return message, e
 }
 func (s *Store) CleanupSessions(ctx context.Context) error {
 	_, e := s.DB.ExecContext(ctx, `DELETE FROM "SantaGoSessions" WHERE "ExpiresAt" < $1`, time.Now().UTC())

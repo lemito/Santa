@@ -19,7 +19,7 @@ func Load() Config {
 	}
 	addr := os.Getenv("SANTA_GO_ADDR")
 	if addr == "" {
-		addr = ":5083"
+		addr = ":5080"
 	}
 	db := os.Getenv("ConnectionStrings__DefaultConnection")
 	if db == "" {

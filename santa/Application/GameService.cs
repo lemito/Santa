@@ -11,6 +11,11 @@ public interface IGameStore
     Task Commit(Guid actor, PublishInput request, Snapshot snapshot, IReadOnlyDictionary<Guid, Guid> assignments);
     Task Close(Guid actor, Guid id);
     Task<RecipientView> MyAssignment(Guid actor, Guid id);
+    Task<ParticipantMessageView> MyMessage(Guid actor, Guid id);
+    Task SetMessage(Guid actor, Guid id, string message);
+    Task<ParticipantMessageView> MyRecipientMessage(Guid actor, Guid id);
+    Task SetRecipientMessage(Guid actor, Guid id, string message);
+    Task<ParticipantMessageView> MessageFromSanta(Guid actor, Guid id);
 }
 
 public sealed class GameService(IGameStore store, IAssignmentEngine engine)
@@ -23,6 +28,11 @@ public sealed class GameService(IGameStore store, IAssignmentEngine engine)
     public Task<Snapshot?> Capture(Guid actor, Guid id, PublishInput request) => store.Capture(actor,id,request);
     public Task Close(Guid actor, Guid id) => store.Close(actor,id);
     public Task<RecipientView> MyAssignment(Guid actor, Guid id) => store.MyAssignment(actor,id);
+    public Task<ParticipantMessageView> MyMessage(Guid actor, Guid id) => store.MyMessage(actor,id);
+    public Task SetMessage(Guid actor, Guid id, string message) => store.SetMessage(actor,id,message);
+    public Task<ParticipantMessageView> MyRecipientMessage(Guid actor, Guid id) => store.MyRecipientMessage(actor,id);
+    public Task SetRecipientMessage(Guid actor, Guid id, string message) => store.SetRecipientMessage(actor,id,message);
+    public Task<ParticipantMessageView> MessageFromSanta(Guid actor, Guid id) => store.MessageFromSanta(actor,id);
     public async Task Publish(Guid actor, Guid id, PublishInput request)
     {
         var snapshot = await Capture(actor,id,request);

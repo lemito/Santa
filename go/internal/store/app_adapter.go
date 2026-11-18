@@ -41,7 +41,7 @@ func (a AppStore) Configuration(ctx context.Context, actor, id uuid.UUID) (app.C
 		return app.ConfigurationView{}, err
 	}
 	if owner != actor {
-		return app.ConfigurationView{}, ErrNotFound
+		return app.ConfigurationView{}, ErrForbidden
 	}
 	rows, e := a.DB.QueryContext(ctx, `SELECT p."AccountId",u."Email",u."DisplayName" FROM "Participants" p JOIN "AspNetUsers" u ON u."Id"=p."AccountId" WHERE p."GameId"=$1 ORDER BY p."AccountId"`, id)
 	if e != nil {
@@ -99,9 +99,27 @@ func (a AppStore) Close(ctx context.Context, actor, id uuid.UUID) error {
 	return a.Store.Close(ctx, actor, id)
 }
 func (a AppStore) MyAssignment(ctx context.Context, actor, id uuid.UUID) (app.RecipientView, error) {
-	n, e, er := a.Recipient(ctx, actor, id)
+	n, e, m, er := a.Recipient(ctx, actor, id)
 	if er != nil {
 		return app.RecipientView{}, er
 	}
-	return app.RecipientView{Name: n, Email: e}, nil
+	return app.RecipientView{Name: n, Email: e, Message: m}, nil
+}
+func (a AppStore) MyMessage(ctx context.Context, actor, id uuid.UUID) (app.MessageView, error) {
+	m, err := a.Store.MyMessage(ctx, actor, id)
+	return app.MessageView{Markdown: m}, err
+}
+func (a AppStore) SetMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	return a.Store.SetMessage(ctx, actor, id, message)
+}
+func (a AppStore) MyRecipientMessage(ctx context.Context, actor, id uuid.UUID) (app.MessageView, error) {
+	m, err := a.Store.MyRecipientMessage(ctx, actor, id)
+	return app.MessageView{Markdown: m}, err
+}
+func (a AppStore) SetRecipientMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	return a.Store.SetRecipientMessage(ctx, actor, id, message)
+}
+func (a AppStore) MessageFromSanta(ctx context.Context, actor, id uuid.UUID) (app.MessageView, error) {
+	m, err := a.Store.MessageFromSanta(ctx, actor, id)
+	return app.MessageView{Markdown: m}, err
 }

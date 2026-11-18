@@ -13,6 +13,7 @@ public sealed class Participant
 {
     public Guid GameId { get; set; }
     public Guid AccountId { get; set; }
+    public string SantaMessage { get; set; } = "";
     public Account Account { get; set; } = null!;
 }
 public sealed class ExcludedPair
@@ -33,4 +34,5 @@ public sealed class Assignment
     public Guid GameId { get; set; }
     public Guid GiverId { get; set; }
     public Guid ReceiverId { get; set; }
+    public string RecipientMessage { get; set; } = "";
 }

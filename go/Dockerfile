@@ -17,5 +17,5 @@ COPY go/static /app/static
 COPY go/migrations /app/migrations
 ENV LD_LIBRARY_PATH=/usr/local/lib
 WORKDIR /app
-EXPOSE 5083
+EXPOSE 5080
 ENTRYPOINT ["/usr/local/bin/santa-go"]

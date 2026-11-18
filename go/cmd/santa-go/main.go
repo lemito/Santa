@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	migrate := flag.Bool("migrate", false, "apply Go session migration")
+	migrate := flag.Bool("migrate", false, "apply database migrations")
 	flag.Parse()
 	cfg := config.Load()
 	if cfg.DatabaseURL == "" {
@@ -37,15 +37,23 @@ func main() {
 		log.Fatal(err)
 	}
 	if *migrate {
-		data, err := os.ReadFile(filepath.Join("go", "migrations", "0001_go_sessions.sql"))
-		if err != nil {
-			data, err = os.ReadFile(filepath.Join("migrations", "0001_go_sessions.sql"))
+		dir := filepath.Join("go", "migrations")
+		if _, err := os.Stat(dir); err != nil {
+			dir = "migrations"
 		}
-		if err != nil {
-			log.Fatal(err)
+		files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+		if err != nil || len(files) == 0 {
+			log.Fatal("database migrations not found")
 		}
-		if _, err := db.ExecContext(ctx, string(data)); err != nil {
-			log.Fatal(err)
+		for _, file := range files {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, string(data)); err != nil {
+				log.Fatalf("%s: %v", file, err)
+			}
+			log.Printf("applied %s", filepath.Base(file))
 		}
 		return
 	}

@@ -60,3 +60,9 @@ func TestSameOrigin(t *testing.T) {
 		t.Fatal("cross origin accepted")
 	}
 }
+
+func TestTemplatesLoad(t *testing.T) {
+	if _, err := LoadTemplates("../../templates"); err != nil {
+		t.Fatal(err)
+	}
+}
