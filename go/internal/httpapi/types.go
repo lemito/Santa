@@ -111,3 +111,23 @@ var ErrConflict = errors.New("conflict")
 var ErrValidation = errors.New("validation")
 
 func normalizeEmail(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+func parseExclusions(raw string) ([]Pair, error) {
+	var pairs []Pair
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, ",")
+		if len(parts) != 2 {
+			return nil, errors.New("invalid_exclusion")
+		}
+		first, second := normalizeEmail(parts[0]), normalizeEmail(parts[1])
+		if first == "" || second == "" {
+			return nil, errors.New("invalid_exclusion")
+		}
+		pairs = append(pairs, Pair{First: first, Second: second})
+	}
+	return pairs, nil
+}

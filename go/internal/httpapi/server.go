@@ -341,6 +341,12 @@ func (s *Server) actions(w http.ResponseWriter, r *http.Request) {
 				cfg.Participants = append(cfg.Participants, Participant{Email: email})
 			}
 		}
+		var err error
+		cfg.Exclusions, err = parseExclusions(r.FormValue("exclusions"))
+		if err != nil {
+			redirectErr(w, r, err.Error())
+			return
+		}
 		var ver int64
 		fmt.Sscan(r.FormValue("version"), &ver)
 		if e := s.Games.Configure(r.Context(), u, id, cfg, ver); e != nil {
