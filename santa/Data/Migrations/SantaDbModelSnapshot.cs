@@ -233,6 +233,11 @@ namespace santa.Data.Migrations
                     b.Property<Guid>("ReceiverId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("RecipientMessage")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
                     b.HasKey("GameId", "GiverId");
 
                     b.HasIndex("GameId", "ReceiverId")
@@ -324,6 +329,11 @@ namespace santa.Data.Migrations
 
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SantaMessage")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
 
                     b.HasKey("GameId", "AccountId");
 

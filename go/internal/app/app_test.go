@@ -36,6 +36,19 @@ func (f *fakeStore) Close(context.Context, uuid.UUID, uuid.UUID) error { return 
 func (f *fakeStore) MyAssignment(context.Context, uuid.UUID, uuid.UUID) (RecipientView, error) {
 	return RecipientView{}, nil
 }
+func (f *fakeStore) MyMessage(context.Context, uuid.UUID, uuid.UUID) (MessageView, error) {
+	return MessageView{}, nil
+}
+func (f *fakeStore) SetMessage(context.Context, uuid.UUID, uuid.UUID, string) error { return nil }
+func (f *fakeStore) MyRecipientMessage(context.Context, uuid.UUID, uuid.UUID) (MessageView, error) {
+	return MessageView{}, nil
+}
+func (f *fakeStore) SetRecipientMessage(context.Context, uuid.UUID, uuid.UUID, string) error {
+	return nil
+}
+func (f *fakeStore) MessageFromSanta(context.Context, uuid.UUID, uuid.UUID) (MessageView, error) {
+	return MessageView{}, nil
+}
 
 type fakeEngine struct{ result engine.Result }
 

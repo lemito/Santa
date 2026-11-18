@@ -44,10 +44,56 @@ else if (game != null)
     }
     @if (recipient != null)
     {
-        <section class="recipient panel"><div><h2>Вы дарите подарок</h2><p class="recipient-name">@recipient.Name</p><p class="recipient-email">@recipient.Email</p></div><WinterIllustration Variant="secret" /></section>
+        <section class="recipient panel"><div><h2>Вы дарите подарок</h2><p class="recipient-name">@recipient.Name</p><p class="recipient-email">@recipient.Email</p>
+            @if (!string.IsNullOrWhiteSpace(recipient.MessageHtml))
+            {
+                <div class="recipient-message"><h3>Пожелания подопечного</h3><div class="markdown-content">@((MarkupString)recipient.MessageHtml)</div></div>
+            }
+        </div><WinterIllustration Variant="secret" /></section>
     }
     else if (game.State == "Draft") { <p>Ваш результат появится после жеребьёвки.</p> }
     else if (!game.IsOwner && game.State == "Closed") { <p>Игра завершена, доступ к результату закрыт.</p> }
+    @if (messageFromSanta != null && !string.IsNullOrWhiteSpace(messageFromSanta.Html))
+    {
+        <section class="panel santa-message"><h2>От вашего Санты</h2><div class="markdown-content">@((MarkupString)messageFromSanta.Html)</div></section>
+    }
+    @if (game.State != "Closed" && (messageToSanta != null || messageToRecipient != null))
+    {
+        <div class="message-grid">
+        @if (messageToSanta != null)
+        {
+            <section class="panel message-editor"><h2>Для моего Санты</h2>
+                <form method="post" action="@($"/actions/{Id}/message")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <label for="santa-message">Сообщение</label>
+                    <textarea id="santa-message" name="message" rows="7" maxlength="5000" aria-describedby="santa-message-help">@messageToSanta.Markdown</textarea>
+                    <p id="santa-message-help">Markdown · до 5000 символов · изображения по ссылке</p>
+                    <ActionButton type="submit">Сохранить</ActionButton>
+                </form>
+                @if (!string.IsNullOrWhiteSpace(messageToSanta.Html))
+                {
+                    <div class="message-preview markdown-content">@((MarkupString)messageToSanta.Html)</div>
+                }
+            </section>
+        }
+        @if (messageToRecipient != null)
+        {
+            <section class="panel message-editor"><h2>Для подопечного</h2>
+                <form method="post" action="@($"/actions/{Id}/recipient-message")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <label for="recipient-message">Сообщение</label>
+                    <textarea id="recipient-message" name="message" rows="7" maxlength="5000" aria-describedby="recipient-message-help">@messageToRecipient.Markdown</textarea>
+                    <p id="recipient-message-help">Markdown · до 5000 символов · изображения по ссылке</p>
+                    <ActionButton type="submit">Сохранить</ActionButton>
+                </form>
+                @if (!string.IsNullOrWhiteSpace(messageToRecipient.Html))
+                {
+                    <div class="message-preview markdown-content">@((MarkupString)messageToRecipient.Html)</div>
+                }
+            </section>
+        }
+        </div>
+    }
 }
 <p class="back-link"><a href="/">К моим играм</a></p>
 @code {
@@ -55,14 +101,28 @@ else if (game != null)
     private GameView? game;
     private ConfigurationView? configuration;
     private RecipientView? recipient;
+    private ParticipantMessageView? messageToSanta;
+    private ParticipantMessageView? messageToRecipient;
+    private ParticipantMessageView? messageFromSanta;
     private string? failure;
     private string emails = "", exclusions = "";
     private readonly Guid requestKey = Guid.NewGuid();
     protected override async Task OnParametersSetAsync()
     {
+        game = null;
+        configuration = null;
+        recipient = null;
+        messageToSanta = null;
+        messageToRecipient = null;
+        messageFromSanta = null;
+        failure = null;
         try {
             var actor = WebEndpoints.Actor(Context.HttpContext!.User);
             game = await Games.Get(actor,Id);
+            if (game.State != "Closed") {
+                try { messageToSanta = await Games.MyMessage(actor,Id); }
+                catch (GameException e) when (e.Status == 404) { }
+            }
             if (game.IsOwner && game.State == "Draft") {
                 configuration = await Games.Configuration(actor,Id);
                 emails = string.Join("\n",configuration.Participants.Select(p => p.Email));
@@ -70,6 +130,10 @@ else if (game != null)
             }
             if (game.State == "Published") {
                 try { recipient = await Games.MyAssignment(actor,Id); }
+                catch (GameException e) when (e.Status == 404) { }
+                try { messageToRecipient = await Games.MyRecipientMessage(actor,Id); }
+                catch (GameException e) when (e.Status == 404) { }
+                try { messageFromSanta = await Games.MessageFromSanta(actor,Id); }
                 catch (GameException e) when (e.Status == 404) { }
             }
         } catch (GameException) { failure = "Эта игра не найдена или у вас нет доступа."; }

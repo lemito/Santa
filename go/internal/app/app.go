@@ -47,7 +47,8 @@ type ConfigurationView struct {
 	Participants []ParticipantView
 	Exclusions   []Exclusion
 }
-type RecipientView struct{ Name, Email string }
+type RecipientView struct{ Name, Email, Message string }
+type MessageView struct{ Markdown string }
 
 var (
 	ErrNotFound            = errors.New("not_found")
@@ -66,6 +67,11 @@ type Store interface {
 	Commit(context.Context, uuid.UUID, PublishInput, Snapshot, map[uuid.UUID]uuid.UUID) error
 	Close(context.Context, uuid.UUID, uuid.UUID) error
 	MyAssignment(context.Context, uuid.UUID, uuid.UUID) (RecipientView, error)
+	MyMessage(context.Context, uuid.UUID, uuid.UUID) (MessageView, error)
+	SetMessage(context.Context, uuid.UUID, uuid.UUID, string) error
+	MyRecipientMessage(context.Context, uuid.UUID, uuid.UUID) (MessageView, error)
+	SetRecipientMessage(context.Context, uuid.UUID, uuid.UUID, string) error
+	MessageFromSanta(context.Context, uuid.UUID, uuid.UUID) (MessageView, error)
 }
 
 type Service struct {
@@ -93,6 +99,21 @@ func (s Service) Close(ctx context.Context, actor, id uuid.UUID) error {
 }
 func (s Service) MyAssignment(ctx context.Context, actor, id uuid.UUID) (RecipientView, error) {
 	return s.Store.MyAssignment(ctx, actor, id)
+}
+func (s Service) MyMessage(ctx context.Context, actor, id uuid.UUID) (MessageView, error) {
+	return s.Store.MyMessage(ctx, actor, id)
+}
+func (s Service) SetMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	return s.Store.SetMessage(ctx, actor, id, message)
+}
+func (s Service) MyRecipientMessage(ctx context.Context, actor, id uuid.UUID) (MessageView, error) {
+	return s.Store.MyRecipientMessage(ctx, actor, id)
+}
+func (s Service) SetRecipientMessage(ctx context.Context, actor, id uuid.UUID, message string) error {
+	return s.Store.SetRecipientMessage(ctx, actor, id, message)
+}
+func (s Service) MessageFromSanta(ctx context.Context, actor, id uuid.UUID) (MessageView, error) {
+	return s.Store.MessageFromSanta(ctx, actor, id)
 }
 
 func (s Service) Publish(ctx context.Context, actor, id uuid.UUID, request PublishInput) error {

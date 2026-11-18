@@ -2,7 +2,8 @@
 
 Небольшой самостоятельный сайт для жеребьёвки Тайного Санты.
 
-Основное приложение находится в `santa/`: ASP.NET Core, Blazor и PostgreSQL.
+Основное приложение находится в `go/`: Go и PostgreSQL. Предыдущая версия на
+ASP.NET Core / Blazor сохранена в `santa/` и запускается через профиль `dotnet`.
 Жеребьёвка выполняется нативным C++20 модулем через C ABI. YASL подключается
 как Git submodule в `third_party/yasl`.
 
@@ -21,16 +22,16 @@
 git submodule update --init third_party/yasl
 cp .env.example .env
 # Задайте в .env случайное значение POSTGRES_PASSWORD.
-docker compose build
+docker compose build santa-go
 docker compose up -d db
-docker compose run --rm santa --migrate
-docker compose up -d santa
+docker compose run --rm santa-go --migrate
+docker compose up -d santa-go
 ```
 
 Сайт будет доступен по адресу <http://localhost:5080>.
 
-Миграция запускается отдельной командой. Сервис не меняет схему базы данных при
-каждом старте.
+Миграция запускается отдельной командой. Для запуска сохранённой .NET-версии
+используйте `docker compose --profile dotnet up -d santa` после её миграции.
 
 ### Как пользоваться
 
@@ -39,30 +40,35 @@ docker compose up -d santa
    добавьте и его email.
 3. При необходимости укажите пары исключений, по одной паре в строке.
 4. Сохраните состав и запустите жеребьёвку.
-5. Каждый участник войдёт под своим аккаунтом и увидит только своего получателя.
-6. После закрытия игры результаты больше не открываются.
+5. Участник может оставить своему Санте сообщение с пожеланиями, а после
+   жеребьёвки Санта может анонимно ответить подопечному.
+6. В сообщениях поддерживается безопасный Markdown, включая изображения по
+   `http`- и `https`-ссылкам. Каждый участник видит только своего получателя.
+7. После закрытия игры результаты больше не открываются.
 
 В текущей версии нет писем, подтверждения email, гостевых приглашений и
 восстановления пароля. Email используется как имя аккаунта.
 
 ## Сборка без Docker
 
-Нужны Linux, C++20 compiler, CMake 3.20 или новее, .NET SDK 10 и PostgreSQL.
+Нужны Linux, C++20 compiler, CMake 3.20 или новее, Go 1.23 и PostgreSQL.
 
 ```bash
 git submodule update --init third_party/yasl
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j 2
 ctest --test-dir build --output-on-failure
-dotnet restore santa/santa.csproj --locked-mode
-export ConnectionStrings__Santa='Host=localhost;Database=santa;Username=santa;Password=YOUR_PASSWORD'
-dotnet run --project santa -- --migrate
-ASPNETCORE_ENVIRONMENT=Development dotnet run \
-  --project santa --no-launch-profile --urls http://localhost:5080
+cd go
+go mod download
+export DATABASE_URL='postgres://santa:YOUR_PASSWORD@localhost:5432/santa?sslmode=disable'
+export SANTA_GO_ADDR=:5080
+export SANTA_GO_SECURE_COOKIES=false
+LD_LIBRARY_PATH=../build go run ./cmd/santa-go --migrate
+LD_LIBRARY_PATH=../build go run ./cmd/santa-go
 ```
 
-Сначала собирается `build/libsanta_native.so`, затем .NET-проект копирует его в
-серверную сборку и в publish.
+Сначала собирается `build/libsanta_native.so`, затем Go-сервис загружает его
+через C ABI.
 
 ## Проверки
 
@@ -79,15 +85,16 @@ HTTP smoke запускается против уже работающего с�
 SANTA_TEST_URL=http://localhost:5080 python3 scripts/http-smoke.py
 ```
 
-Проверки включают C++ core, C ABI, отображение Guid, права доступа, гонки при
-публикации, повторные запросы и откат частичной записи.
+Проверки включают C++ core, C ABI, отображение Guid, права доступа, безопасный
+Markdown сообщений, гонки при публикации, повторные запросы и откат частичной
+записи.
 
 ## Что где находится
 
-- `santa/` — основной сайт;
+- `go/` — основной сайт на Go;
+- `santa/` — сохранённая версия сайта на ASP.NET Core / Blazor;
 - `core/` — C++ engine и C ABI;
 - `third_party/yasl/` — исходник YASL;
 - `scripts/` — smoke-проверки;
 - `tests/` — интеграционный harness;
-- `go/` — сохранённая параллельная реализация сервера;
 - `web/` — второй шаблон, сохранённый для справки.

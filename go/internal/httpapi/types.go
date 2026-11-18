@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"html/template"
 	"net/http"
 	"strings"
 	"sync"
@@ -49,7 +50,13 @@ type Pair struct {
 	Second string `json:"second"`
 }
 type Recipient struct {
-	Recipient Participant `json:"recipient"`
+	Name        string        `json:"name"`
+	Email       string        `json:"email"`
+	MessageHTML template.HTML `json:"messageHtml"`
+}
+type Message struct {
+	Markdown string        `json:"markdown"`
+	HTML     template.HTML `json:"html"`
 }
 type PublishRequest struct {
 	Version    int64  `json:"version"`
@@ -64,6 +71,11 @@ type GameService interface {
 	Publish(context.Context, *User, string, PublishRequest) error
 	Close(context.Context, *User, string) error
 	Assignment(context.Context, *User, string) (Recipient, error)
+	MyMessage(context.Context, *User, string) (Message, error)
+	SetMessage(context.Context, *User, string, string) error
+	MyRecipientMessage(context.Context, *User, string) (Message, error)
+	SetRecipientMessage(context.Context, *User, string, string) error
+	MessageFromSanta(context.Context, *User, string) (Message, error)
 }
 type Server struct {
 	Auth      Auth

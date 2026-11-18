@@ -16,5 +16,6 @@ public record PublishInput(long Version, Guid RequestKey);
 public record ParticipantView(Guid Id, string Email, string Name);
 public record GameView(Guid Id, string Title, string State, long Version, bool IsOwner);
 public record ConfigurationView(ParticipantView[] Participants, PairEmails[] Exclusions);
-public record RecipientView(string Name, string Email);
+public record ParticipantMessageView(string Markdown, string Html);
+public record RecipientView(string Name, string Email, string MessageHtml);
 public record Snapshot(Guid GameId, long Version, EngineInput Input);

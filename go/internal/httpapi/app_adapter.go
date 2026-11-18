@@ -18,6 +18,9 @@ func appError(err error) error {
 	if strings.Contains(m, "not found") {
 		return ErrNotFound
 	}
+	if strings.Contains(m, "forbidden") {
+		return ErrForbidden
+	}
 	if strings.Contains(m, "conflict") {
 		return ErrConflict
 	}
@@ -82,7 +85,11 @@ func (a AppAdapter) Configuration(ctx context.Context, u *User, id string) (Conf
 	if e != nil {
 		return Configuration{}, appError(e)
 	}
-	out := Configuration{}
+	g, e := a.Service.Get(ctx, actor, gid)
+	if e != nil {
+		return Configuration{}, appError(e)
+	}
+	out := Configuration{Version: g.Version}
 	for _, p := range c.Participants {
 		out.Participants = append(out.Participants, Participant{ID: p.ID.String(), Email: p.Email, DisplayName: p.Name})
 	}
@@ -159,5 +166,63 @@ func (a AppAdapter) Assignment(ctx context.Context, u *User, id string) (Recipie
 	if e != nil {
 		return Recipient{}, appError(e)
 	}
-	return Recipient{Recipient: Participant{Email: v.Email, DisplayName: v.Name}}, nil
+	return Recipient{Name: v.Name, Email: v.Email, MessageHTML: safeMarkdown(v.Message)}, nil
+}
+func (a AppAdapter) MyMessage(ctx context.Context, u *User, id string) (Message, error) {
+	actor, gid, err := a.ids(u, id)
+	if err != nil {
+		return Message{}, err
+	}
+	v, err := a.Service.MyMessage(ctx, actor, gid)
+	if err != nil {
+		return Message{}, appError(err)
+	}
+	return Message{Markdown: v.Markdown, HTML: safeMarkdown(v.Markdown)}, nil
+}
+func (a AppAdapter) SetMessage(ctx context.Context, u *User, id, message string) error {
+	actor, gid, err := a.ids(u, id)
+	if err != nil {
+		return err
+	}
+	return appError(a.Service.SetMessage(ctx, actor, gid, message))
+}
+func (a AppAdapter) MyRecipientMessage(ctx context.Context, u *User, id string) (Message, error) {
+	actor, gid, err := a.ids(u, id)
+	if err != nil {
+		return Message{}, err
+	}
+	v, err := a.Service.MyRecipientMessage(ctx, actor, gid)
+	if err != nil {
+		return Message{}, appError(err)
+	}
+	return Message{Markdown: v.Markdown, HTML: safeMarkdown(v.Markdown)}, nil
+}
+func (a AppAdapter) SetRecipientMessage(ctx context.Context, u *User, id, message string) error {
+	actor, gid, err := a.ids(u, id)
+	if err != nil {
+		return err
+	}
+	return appError(a.Service.SetRecipientMessage(ctx, actor, gid, message))
+}
+func (a AppAdapter) MessageFromSanta(ctx context.Context, u *User, id string) (Message, error) {
+	actor, gid, err := a.ids(u, id)
+	if err != nil {
+		return Message{}, err
+	}
+	v, err := a.Service.MessageFromSanta(ctx, actor, gid)
+	if err != nil {
+		return Message{}, appError(err)
+	}
+	return Message{Markdown: v.Markdown, HTML: safeMarkdown(v.Markdown)}, nil
+}
+func (a AppAdapter) ids(u *User, id string) (uuid.UUID, uuid.UUID, error) {
+	actor, err := a.actor(u)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	gid, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, ErrNotFound
+	}
+	return actor, gid, nil
 }

@@ -1,1 +1,65 @@
-{{define "game"}}<section class="panel game-workspace"><h2>{{.Title}}</h2><p class="status">{{.State}}</p></section>{{end}}
+{{define "game"}}
+<header class="page-heading"><span class="status {{if eq .State "Published"}}status-published{{else if eq .State "Closed"}}status-closed{{end}}">{{if eq .State "Draft"}}Черновик{{else if eq .State "Published"}}Идёт{{else}}Завершена{{end}}</span><h1>{{.Title}}</h1></header>
+
+{{if and .Game.Owner (eq .State "Draft")}}
+<div class="game-workspace">
+  <section class="panel configuration-panel"><h2>Участники и исключения</h2><form method="post" action="/actions/{{.Game.ID}}/configure"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><input type="hidden" name="version" value="{{.Game.Version}}"><label for="emails">Email участников</label><textarea id="emails" name="emails" rows="7" required>{{.Emails}}</textarea><p>По одному email в строке.</p><label for="exclusions">Кто не должен дарить друг другу</label><textarea id="exclusions" name="exclusions" rows="4">{{.Exclusions}}</textarea><p>Два email через запятую, по паре в строке.</p><button type="submit">Сохранить</button></form></section>
+  <section class="panel draw-panel"><h2>Жеребьёвка</h2><form method="post" action="/actions/{{.Game.ID}}/publish"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><input type="hidden" name="version" value="{{.Game.Version}}"><input type="hidden" name="requestKey" value="{{.RequestKey}}"><button type="submit">Провести жеребьёвку</button></form></section>
+</div>
+{{end}}
+
+{{if and .Game.Owner (eq .State "Published")}}<form class="close-form" method="post" action="/actions/{{.Game.ID}}/close"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><button class="finish-button" type="submit">Завершить игру</button></form>{{end}}
+
+{{if or .HasRecipient .CanMessageRecipient .CanMessageSanta .HasMessageFromSanta}}
+<div class="role-tabs">
+  {{if and (or .HasRecipient .CanMessageRecipient) (or .CanMessageSanta .HasMessageFromSanta)}}
+  <input class="role-tab-toggle giver-role-toggle" type="radio" name="role-mode" id="giver-role" checked><label class="role-tab" for="giver-role">Я дарю</label>
+  <input class="role-tab-toggle receiver-role-toggle" type="radio" name="role-mode" id="receiver-role"><label class="role-tab" for="receiver-role">Мне дарят</label>
+  {{end}}
+  {{if or .HasRecipient .CanMessageRecipient}}
+  <div class="{{if and (or .HasRecipient .CanMessageRecipient) (or .CanMessageSanta .HasMessageFromSanta)}}role-tab-panel giver-tab-panel{{else}}only-role{{end}}">
+  <section class="role-zone giver-zone" aria-label="Я дарю">
+    {{if .HasRecipient}}<div class="recipient-card"><div><p class="recipient-label">Ваш подопечный</p><p class="recipient-name">{{.Recipient.Name}}</p><p class="recipient-email">{{.Recipient.Email}}</p>{{if .Recipient.MessageHTML}}<div class="recipient-message"><h3>Пожелания</h3><div class="markdown-content">{{.Recipient.MessageHTML}}</div></div>{{end}}</div><img src="/static/images/holiday-parcel.svg" alt=""></div>{{end}}
+    {{if .CanMessageRecipient}}
+    <section class="role-message"><h3>Сообщение подопечному</h3>
+      {{if .MessageToRecipient.HTML}}
+      <div class="message-switch">
+        <input class="message-toggle preview-toggle" type="radio" name="recipient-message-mode" id="recipient-preview" checked><label class="message-tab" for="recipient-preview">Просмотр</label>
+        <input class="message-toggle editor-toggle" type="radio" name="recipient-message-mode" id="recipient-editor"><label class="message-tab" for="recipient-editor">Редактировать</label>
+        <div class="message-view preview-view markdown-content">{{.MessageToRecipient.HTML}}</div>
+        <div class="message-view editor-view"><form method="post" action="/actions/{{.Game.ID}}/recipient-message"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><label for="recipient-message">Сообщение</label><textarea id="recipient-message" name="message" rows="7" maxlength="5000">{{.MessageToRecipient.Markdown}}</textarea><p>Markdown · до 5000 символов · изображения по ссылке</p><button type="submit">Сохранить</button></form></div>
+      </div>
+      {{else}}
+      <form method="post" action="/actions/{{.Game.ID}}/recipient-message"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><label for="recipient-message">Сообщение</label><textarea id="recipient-message" name="message" rows="7" maxlength="5000"></textarea><p>Markdown · до 5000 символов · изображения по ссылке</p><button type="submit">Сохранить</button></form>
+      {{end}}
+    </section>
+    {{end}}
+  </section>
+  </div>
+  {{end}}
+
+  {{if or .CanMessageSanta .HasMessageFromSanta}}
+  <div class="{{if and (or .HasRecipient .CanMessageRecipient) (or .CanMessageSanta .HasMessageFromSanta)}}role-tab-panel receiver-tab-panel{{else}}only-role{{end}}">
+  <section class="role-zone receiver-zone" aria-label="Мне дарят">
+    {{if .HasMessageFromSanta}}<section class="incoming-message"><h3>От вашего Санты</h3><div class="markdown-content">{{.MessageFromSanta.HTML}}</div></section>{{end}}
+    {{if .CanMessageSanta}}
+    <section class="role-message"><h3>Пожелания Санте</h3>
+      {{if .MessageToSanta.HTML}}
+      <div class="message-switch">
+        <input class="message-toggle preview-toggle" type="radio" name="santa-message-mode" id="santa-preview" checked><label class="message-tab" for="santa-preview">Просмотр</label>
+        <input class="message-toggle editor-toggle" type="radio" name="santa-message-mode" id="santa-editor"><label class="message-tab" for="santa-editor">Редактировать</label>
+        <div class="message-view preview-view markdown-content">{{.MessageToSanta.HTML}}</div>
+        <div class="message-view editor-view"><form method="post" action="/actions/{{.Game.ID}}/message"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><label for="santa-message">Сообщение</label><textarea id="santa-message" name="message" rows="7" maxlength="5000">{{.MessageToSanta.Markdown}}</textarea><p>Markdown · до 5000 символов · изображения по ссылке</p><button type="submit">Сохранить</button></form></div>
+      </div>
+      {{else}}
+      <form method="post" action="/actions/{{.Game.ID}}/message"><input type="hidden" name="csrfToken" value="{{.CSRF}}"><label for="santa-message">Сообщение</label><textarea id="santa-message" name="message" rows="7" maxlength="5000"></textarea><p>Markdown · до 5000 символов · изображения по ссылке</p><button type="submit">Сохранить</button></form>
+      {{end}}
+    </section>
+    {{end}}
+  </section>
+  </div>
+  {{end}}
+</div>
+{{else if eq .State "Draft"}}<p>Ваш результат появится после жеребьёвки.</p>{{else if eq .State "Closed"}}<p>Игра завершена, доступ к результату закрыт.</p>{{end}}
+
+{{end}}

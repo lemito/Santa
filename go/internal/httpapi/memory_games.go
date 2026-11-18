@@ -90,3 +90,29 @@ func (g *MemoryGames) Assignment(_ context.Context, _ *User, id string) (Recipie
 	}
 	return Recipient{}, nil
 }
+func (g *MemoryGames) MyMessage(_ context.Context, _ *User, id string) (Message, error) {
+	if _, e := g.Get(context.Background(), nil, id); e != nil {
+		return Message{}, e
+	}
+	return Message{}, nil
+}
+func (g *MemoryGames) SetMessage(_ context.Context, _ *User, id, _ string) error {
+	_, e := g.Get(context.Background(), nil, id)
+	return e
+}
+func (g *MemoryGames) MyRecipientMessage(_ context.Context, _ *User, id string) (Message, error) {
+	if _, e := g.Get(context.Background(), nil, id); e != nil {
+		return Message{}, e
+	}
+	return Message{}, nil
+}
+func (g *MemoryGames) SetRecipientMessage(_ context.Context, _ *User, id, _ string) error {
+	_, e := g.Get(context.Background(), nil, id)
+	return e
+}
+func (g *MemoryGames) MessageFromSanta(_ context.Context, _ *User, id string) (Message, error) {
+	if _, e := g.Get(context.Background(), nil, id); e != nil {
+		return Message{}, e
+	}
+	return Message{}, nil
+}

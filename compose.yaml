@@ -18,14 +18,15 @@ services:
       dockerfile: go/Dockerfile
     environment:
       DATABASE_URL: postgres://santa:${POSTGRES_PASSWORD}@db:5432/santa
-      SANTA_GO_ADDR: :5083
+      SANTA_GO_ADDR: :5080
       SANTA_GO_SECURE_COOKIES: "false"
     ports:
-      - '127.0.0.1:5083:5083'
+      - '127.0.0.1:5080:5080'
     depends_on:
       db:
         condition: service_healthy
   santa:
+    profiles: [dotnet]
     build: .
     environment:
       ConnectionStrings__Santa: Host=db;Database=santa;Username=santa;Password=${POSTGRES_PASSWORD}

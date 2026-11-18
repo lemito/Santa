@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 func (s *Server) Handler() http.Handler {
@@ -39,6 +41,7 @@ func withBodyLimit(next http.Handler) http.Handler {
 func withRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Santa-Backend", "go")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -233,6 +236,51 @@ func (s *Server) games(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if len(parts) == 2 && (parts[1] == "my-message" || parts[1] == "my-recipient-message" || parts[1] == "message-from-santa") {
+		if r.Method == http.MethodGet {
+			var v Message
+			var e error
+			switch parts[1] {
+			case "my-message":
+				v, e = s.Games.MyMessage(r.Context(), u, id)
+			case "my-recipient-message":
+				v, e = s.Games.MyRecipientMessage(r.Context(), u, id)
+			case "message-from-santa":
+				v, e = s.Games.MessageFromSanta(r.Context(), u, id)
+			}
+			if e != nil {
+				writeErr(w, e)
+				return
+			}
+			writeJSON(w, 200, v)
+			return
+		}
+		if r.Method == http.MethodPut && parts[1] != "message-from-santa" {
+			if err := s.requireCSRF(r); err != nil {
+				writeError(w, 403, "csrf")
+				return
+			}
+			var in struct {
+				Message string `json:"message"`
+			}
+			if json.NewDecoder(r.Body).Decode(&in) != nil {
+				writeError(w, 422, "invalid_json")
+				return
+			}
+			var e error
+			if parts[1] == "my-message" {
+				e = s.Games.SetMessage(r.Context(), u, id, in.Message)
+			} else {
+				e = s.Games.SetRecipientMessage(r.Context(), u, id, in.Message)
+			}
+			if e != nil {
+				writeErr(w, e)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
 	if len(parts) == 2 && (parts[1] == "publish" || parts[1] == "close" || parts[1] == "my-assignment") {
 		switch parts[1] {
 		case "publish":
@@ -341,9 +389,28 @@ func (s *Server) actions(w http.ResponseWriter, r *http.Request) {
 				cfg.Participants = append(cfg.Participants, Participant{Email: email})
 			}
 		}
+		for _, line := range strings.Split(r.FormValue("exclusions"), "\n") {
+			parts := strings.Split(line, ",")
+			if len(parts) == 2 {
+				first, second := normalizeEmail(parts[0]), normalizeEmail(parts[1])
+				if first != "" && second != "" {
+					cfg.Exclusions = append(cfg.Exclusions, Pair{First: first, Second: second})
+				}
+			}
+		}
 		var ver int64
 		fmt.Sscan(r.FormValue("version"), &ver)
 		if e := s.Games.Configure(r.Context(), u, id, cfg, ver); e != nil {
+			redirectErr(w, r, e.Error())
+			return
+		}
+	case "message":
+		if e := s.Games.SetMessage(r.Context(), u, id, r.FormValue("message")); e != nil {
+			redirectErr(w, r, e.Error())
+			return
+		}
+	case "recipient-message":
+		if e := s.Games.SetRecipientMessage(r.Context(), u, id, r.FormValue("message")); e != nil {
 			redirectErr(w, r, e.Error())
 			return
 		}
@@ -382,12 +449,52 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, err)
 			return
 		}
+		data["Game"] = g
 		data["Title"], data["State"] = g.Title, g.State
+		data["RequestKey"] = uuid.NewString()
+		if g.Owner && g.State == "Draft" {
+			if cfg, e := s.Games.Configuration(r.Context(), u, id); e == nil {
+				var emails, exclusions strings.Builder
+				for _, p := range cfg.Participants {
+					emails.WriteString(p.Email)
+					emails.WriteByte('\n')
+				}
+				for _, p := range cfg.Exclusions {
+					exclusions.WriteString(p.First)
+					exclusions.WriteString(", ")
+					exclusions.WriteString(p.Second)
+					exclusions.WriteByte('\n')
+				}
+				data["Configuration"], data["Emails"], data["Exclusions"] = cfg, emails.String(), exclusions.String()
+			}
+		}
+		if g.State != "Closed" {
+			if m, e := s.Games.MyMessage(r.Context(), u, id); e == nil {
+				data["MessageToSanta"], data["CanMessageSanta"] = m, true
+			}
+		}
+		if g.State == "Published" {
+			if v, e := s.Games.Assignment(r.Context(), u, id); e == nil {
+				data["Recipient"], data["HasRecipient"] = v, true
+			}
+			if m, e := s.Games.MyRecipientMessage(r.Context(), u, id); e == nil {
+				data["MessageToRecipient"], data["CanMessageRecipient"] = m, true
+			}
+			if m, e := s.Games.MessageFromSanta(r.Context(), u, id); e == nil && m.HTML != "" {
+				data["MessageFromSanta"], data["HasMessageFromSanta"] = m, true
+			}
+		}
 	}
 	csrf := ""
 	if s.Auth != nil {
 		if session, _ := s.Auth.Session(r); session != nil {
 			csrf = session.CSRF
+			data["Authenticated"], data["User"] = session.User != nil, session.User
+			if name == "home" && session.User != nil {
+				if games, e := s.Games.List(r.Context(), session.User); e == nil {
+					data["Games"] = games
+				}
+			}
 		}
 	}
 	data["CSRF"], data["Page"] = csrf, name
