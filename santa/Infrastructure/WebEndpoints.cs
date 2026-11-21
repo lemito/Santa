@@ -72,10 +72,10 @@ public static class WebEndpoints
         forms.MapPost("/create", async ([FromForm] string title, ClaimsPrincipal u, GameService games) =>
             Results.LocalRedirect($"/games/{await games.Create(Actor(u),title)}"));
         forms.MapPost("/{id:guid}/configure", async (Guid id, [FromForm] long version, [FromForm] string? emails,
-            [FromForm] string? exclusions, ClaimsPrincipal u, GameService games) => {
+            [FromForm] string? exclusions, [FromForm] long budgetMinor, [FromForm] string? currency, [FromForm] string? budgetNote, ClaimsPrincipal u, GameService games) => {
             var pairs = Lines(exclusions).Select(line => line.Split(',', StringSplitOptions.TrimEntries)).ToArray();
             if (pairs.Any(p => p.Length != 2)) throw new GameException("invalid_exclusion");
-            await games.Configure(Actor(u),id,new(version,Lines(emails),pairs.Select(p => new PairEmails(p[0],p[1])).ToArray()));
+            await games.Configure(Actor(u),id,new(version,Lines(emails),pairs.Select(p => new PairEmails(p[0],p[1])).ToArray(),budgetMinor,currency ?? "EUR",budgetNote ?? ""));
             return Results.LocalRedirect($"/games/{id}");
         });
         forms.MapPost("/{id:guid}/publish", async (Guid id, [FromForm] long version, [FromForm] Guid requestKey,

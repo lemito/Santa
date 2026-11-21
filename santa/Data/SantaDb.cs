@@ -16,6 +16,9 @@ public sealed class SantaDb(DbContextOptions<SantaDb> options) : IdentityDbConte
         b.Entity<Game>(e => {
             e.HasKey(x => x.Id); e.Property(x => x.Title).HasMaxLength(150);
             e.Property(x => x.State).HasMaxLength(16);
+            e.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+            e.Property(x => x.BudgetNote).HasMaxLength(500);
+            e.ToTable(t => t.HasCheckConstraint("nonnegative_budget", "\"BudgetMinor\" >= 0"));
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("game_state", "\"State\" IN ('Draft','Published','Closed')"));
         });
@@ -33,6 +36,8 @@ public sealed class SantaDb(DbContextOptions<SantaDb> options) : IdentityDbConte
         });
         b.Entity<Draw>(e => {
             e.HasKey(x => x.GameId);
+            e.Property(x => x.InputDigest).HasMaxLength(64);
+            e.Property(x => x.ResultDigest).HasMaxLength(64);
             e.HasOne<Game>().WithOne().HasForeignKey<Draw>(x => x.GameId).OnDelete(DeleteBehavior.Restrict);
         });
         b.Entity<Assignment>(e => {

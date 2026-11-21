@@ -11,10 +11,11 @@ public sealed class GameException(string code, int status = 400) : Exception(cod
     public int Status => status;
 }
 public record PairEmails(string First, string Second);
-public record ConfigurationInput(long Version, string[] Emails, PairEmails[] Exclusions);
+public record ConfigurationInput(long Version, string[] Emails, PairEmails[] Exclusions, long BudgetMinor = 0, string Currency = "EUR", string BudgetNote = "");
 public record PublishInput(long Version, Guid RequestKey);
 public record ParticipantView(Guid Id, string Email, string Name);
-public record GameView(Guid Id, string Title, string State, long Version, bool IsOwner);
+public record GameView(Guid Id, string Title, string State, long Version, bool IsOwner, long BudgetMinor = 0, string Currency = "EUR", string BudgetNote = "", DrawReceipt? Receipt = null);
+public record DrawReceipt(string EngineVersion, string InputDigest, string ResultDigest, int ParticipantCount, int ExclusionCount, DateTimeOffset PublishedAt);
 public record ConfigurationView(ParticipantView[] Participants, PairEmails[] Exclusions);
 public record ParticipantMessageView(string Markdown, string Html);
 public record RecipientView(string Name, string Email, string MessageHtml);

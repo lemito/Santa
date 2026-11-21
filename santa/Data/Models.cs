@@ -8,6 +8,9 @@ public sealed class Game
     public string Title { get; set; } = "";
     public string State { get; set; } = "Draft";
     public long Version { get; set; } = 1;
+    public long BudgetMinor { get; set; }
+    public string Currency { get; set; } = "EUR";
+    public string BudgetNote { get; set; } = "";
 }
 public sealed class Participant
 {
@@ -28,6 +31,11 @@ public sealed class Draw
     public long Version { get; set; }
     public Guid RequestKey { get; set; }
     public string EngineVersion { get; set; } = "uniform-hybrid-v1";
+    public string InputDigest { get; set; } = "";
+    public string ResultDigest { get; set; } = "";
+    public int ParticipantCount { get; set; }
+    public int ExclusionCount { get; set; }
+    public DateTimeOffset PublishedAt { get; set; }
 }
 public sealed class Assignment
 {

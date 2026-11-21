@@ -27,7 +27,7 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
     {
         await using var db = await factory.CreateDbContextAsync();
         return await db.Games.Where(g => g.OwnerId == actor || db.Participants.Any(p => p.GameId == g.Id && p.AccountId == actor))
-            .OrderBy(g => g.Title).Select(g => new GameView(g.Id,g.Title,g.State,g.Version,g.OwnerId == actor)).ToArrayAsync();
+            .OrderBy(g => g.Title).Select(g => new GameView(g.Id,g.Title,g.State,g.Version,g.OwnerId == actor,g.BudgetMinor,g.Currency,g.BudgetNote)).ToArrayAsync();
     }
     public async Task<GameView> Get(Guid actor, Guid id)
     {
@@ -35,7 +35,9 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
         var game = await db.Games.FindAsync(id) ?? throw new GameException("not_found",404);
         if (game.OwnerId != actor && !await db.Participants.AnyAsync(p => p.GameId == id && p.AccountId == actor))
             throw new GameException("not_found",404);
-        return new(game.Id,game.Title,game.State,game.Version,game.OwnerId == actor);
+        var draw = await db.Draws.FindAsync(id);
+        return new(game.Id,game.Title,game.State,game.Version,game.OwnerId == actor,game.BudgetMinor,game.Currency,game.BudgetNote,
+            draw == null ? null : new(draw.EngineVersion,draw.InputDigest,draw.ResultDigest,draw.ParticipantCount,draw.ExclusionCount,draw.PublishedAt));
     }
     public async Task<ConfigurationView> Configuration(Guid actor, Guid id)
     {
@@ -56,6 +58,8 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
         if (input.Emails is null || input.Exclusions is null ||
             input.Emails.Any(e => string.IsNullOrWhiteSpace(e) || e.Trim().Length > 256))
             throw new GameException("invalid_configuration");
+        if (input.BudgetMinor < 0 || input.Currency is null || input.Currency.Trim().Length != 3 || input.BudgetNote?.Length > 500)
+            throw new GameException("invalid_budget");
         var normalized = input.Emails.Select(e => e.Trim().ToUpperInvariant()).ToArray();
         if (normalized.Distinct().Count() != normalized.Length) throw new GameException("duplicate_participants");
         await using var db = await factory.CreateDbContextAsync();
@@ -77,6 +81,7 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
         db.Participants.AddRange(accounts.Select(a => new Participant { GameId = id,AccountId = a.Id }));
         db.Exclusions.AddRange(pairs.Select(p => new ExcludedPair { GameId = id,FirstId = p.First,SecondId = p.Second }));
         game.Version = checked(game.Version + 1);
+        game.BudgetMinor = input.BudgetMinor; game.Currency = input.Currency.Trim().ToUpperInvariant(); game.BudgetNote = input.BudgetNote?.Trim() ?? "";
         await db.SaveChangesAsync(); await tx.CommitAsync();
     }
     public async Task<Snapshot?> Capture(Guid actor, Guid id, PublishInput request)
@@ -111,11 +116,19 @@ public sealed class EfGameStore(IDbContextFactory<SantaDb> factory) : IGameStore
         }
         Editable(game,snapshot.Version);
         if (request.Version != snapshot.Version) throw new GameException("configuration_conflict",409);
-        db.Draws.Add(new Draw { GameId = game.Id,Version = snapshot.Version,RequestKey = request.RequestKey });
+        var inputDigest = Digest(snapshot.Input);
+        var resultDigest = Digest(assignments);
+        db.Draws.Add(new Draw { GameId = game.Id,Version = snapshot.Version,RequestKey = request.RequestKey,
+            InputDigest = inputDigest, ResultDigest = resultDigest, ParticipantCount = snapshot.Input.Participants.Length,
+            ExclusionCount = snapshot.Input.Exclusions.Length, PublishedAt = DateTimeOffset.UtcNow });
         db.Assignments.AddRange(assignments.Select(p => new Assignment { GameId = game.Id,GiverId = p.Key,ReceiverId = p.Value }));
         game.State = "Published";
         await db.SaveChangesAsync(); await tx.CommitAsync();
     }
+    private static string Digest(EngineInput input) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+        string.Join(';', input.Participants.OrderBy(x => x)) + "|" + string.Join(';', input.Exclusions.OrderBy(x => x.First).ThenBy(x => x.Second).Select(x => $"{x.First}:{x.Second}"))))).ToLowerInvariant();
+    private static string Digest(IReadOnlyDictionary<Guid,Guid> result) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+        string.Join(';', result.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value}"))))).ToLowerInvariant();
     public async Task Close(Guid actor, Guid id)
     {
         await using var db = await factory.CreateDbContextAsync();

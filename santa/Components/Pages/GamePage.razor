@@ -9,6 +9,7 @@
 else if (game != null)
 {
     <header class="page-heading"><StatusBadge State="@game.State" /><h1>@game.Title</h1></header>
+    @if (game.BudgetMinor > 0) { <p class="game-budget">Общий бюджет: @game.BudgetMinor @game.Currency @game.BudgetNote</p> }
     <ErrorMessage />
     @if (game.IsOwner)
     {
@@ -23,6 +24,12 @@ else if (game != null)
                 <label for="exclusions">Кто не должен дарить друг другу</label>
                 <textarea id="exclusions" name="exclusions" rows="4" aria-describedby="exclusions-help">@exclusions</textarea>
                 <p id="exclusions-help">Два email через запятую, по паре в строке. Можно оставить пустым.</p>
+                <label for="budgetMinor">Общий бюджет (в минимальных единицах валюты)</label>
+                <input id="budgetMinor" name="budgetMinor" type="number" min="0" value="@game.BudgetMinor" />
+                <label for="currency">Валюта</label>
+                <input id="currency" name="currency" maxlength="3" value="@game.Currency" />
+                <label for="budgetNote">Примечание к бюджету</label>
+                <input id="budgetNote" name="budgetNote" maxlength="500" value="@game.BudgetNote" />
                 <ActionButton type="submit">Сохранить</ActionButton>
             </form>
             </section><section class="panel draw-panel"><h2>Жеребьёвка</h2>
@@ -37,6 +44,7 @@ else if (game != null)
         else if (game.State == "Published")
         {
             <p>Результаты доступны. Каждый участник видит только своего получателя.</p>
+            @if (game.Receipt is not null) { <section class="panel"><h2>Квитанция жеребьёвки</h2><p>@game.Receipt.PublishedAt.ToLocalTime(): @game.Receipt.ParticipantCount участников, @game.Receipt.ExclusionCount исключений.</p><p>Engine @game.Receipt.EngineVersion · input @game.Receipt.InputDigest · result @game.Receipt.ResultDigest</p></section> }
             <form class="close-form" method="post" action="@($"/actions/{Id}/close")" data-enhance="false">
                 <AntiforgeryToken /><p>После завершения участники больше не смогут посмотреть своего получателя.</p><ActionButton Class="secondary" type="submit">Завершить игру</ActionButton>
             </form>

@@ -258,6 +258,16 @@ namespace santa.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("InputDigest")
+                        .IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResultDigest")
+                        .IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+
+                    b.Property<int>("ParticipantCount").HasColumnType("integer");
+                    b.Property<int>("ExclusionCount").HasColumnType("integer");
+                    b.Property<DateTimeOffset>("PublishedAt").HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("RequestKey")
                         .HasColumnType("uuid");
 
@@ -299,6 +309,10 @@ namespace santa.Data.Migrations
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("BudgetMinor").HasColumnType("bigint");
+                    b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
+                    b.Property<string>("BudgetNote").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -319,6 +333,7 @@ namespace santa.Data.Migrations
                     b.ToTable("Games", t =>
                         {
                             t.HasCheckConstraint("game_state", "\"State\" IN ('Draft','Published','Closed')");
+                            t.HasCheckConstraint("nonnegative_budget", "\"BudgetMinor\" >= 0");
                         });
                 });
 
