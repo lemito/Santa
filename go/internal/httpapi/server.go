@@ -46,9 +46,17 @@ func withRequestID(next http.Handler) http.Handler {
 	})
 }
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 	if s.Ready != nil && !s.Ready(r.Context()) {
 		writeJSON(w, 503, map[string]string{"status": "not_ready"})
 		return
@@ -396,7 +404,6 @@ func (s *Server) actions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		}
 		var ver int64
 		fmt.Sscan(r.FormValue("version"), &ver)
 		if e := s.Games.Configure(r.Context(), u, id, cfg, ver); e != nil {

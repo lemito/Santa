@@ -1,11 +1,23 @@
 package httpapi
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestHandlerRejectsUnsupportedMethods(t *testing.T) {
+	s := &Server{Templates: &Templates{}}
+	r := httptest.NewRequest(http.MethodDelete, "/health", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status=%d, want 405", w.Code)
+	}
+}
 
 func TestParseExclusions(t *testing.T) {
 	pairs, err := parseExclusions(" Alice@example.com, BOB@example.com \n\n")
@@ -64,5 +76,27 @@ func TestSameOrigin(t *testing.T) {
 func TestTemplatesLoad(t *testing.T) {
 	if _, err := LoadTemplates("../../templates"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTemplatesEscapeGameFieldsAndKeepRequiredControls(t *testing.T) {
+	templates, err := LoadTemplates("../../templates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := struct {
+		Page          string
+		Title         string
+		Authenticated bool
+		CSRF          string
+		Games         []Game
+		Game          *Game
+	}{Page: "home", Title: "Home", Authenticated: true, CSRF: "csrf", Games: []Game{{ID: "game", Title: `<script>alert(1)</script>`, State: "Draft"}}}
+	var output strings.Builder
+	if err := templates.T.ExecuteTemplate(&output, "layout", data); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(output.String(), "<script>alert") || !strings.Contains(output.String(), `name="csrfToken"`) {
+		t.Fatal("template escaped content or required CSRF control incorrectly")
 	}
 }

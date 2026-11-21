@@ -74,3 +74,18 @@ func TestPublishCommitsValidResult(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPublishMapsEngineStatuses(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	input := engine.Input{Participants: []uuid.UUID{a, b}}
+	for _, status := range []engine.Status{engine.Unsatisfiable, engine.SearchLimitExceeded, engine.ResourceLimitExceeded, engine.InvalidInput, engine.Cancelled, engine.InternalError} {
+		st := &fakeStore{snap: &Snapshot{GameID: uuid.New(), Version: 1, Input: input}}
+		err := (Service{Store: st, Engine: fakeEngine{result: engine.Result{Status: status}}}).Publish(context.Background(), uuid.New(), uuid.New(), PublishInput{Version: 1, RequestKey: uuid.New()})
+		if err == nil {
+			t.Errorf("status %v returned nil", status)
+		}
+		if st.committed != nil {
+			t.Errorf("status %v committed an assignment", status)
+		}
+	}
+}
