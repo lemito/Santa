@@ -11,5 +11,25 @@ int main(void) {
   assert(sizeof(uint32_t) == 4);
   if (santa_draw(2, 0, 0, budget, output, 2) != SANTA_SUCCESS)
     return 2;
-  return output[0] != 1 || output[1] != 0;
+  if (output[0] != 1 || output[1] != 0)
+    return 3;
+  output[0] = output[1] = 77;
+  if (santa_draw(1, 0, 0, budget, output, 2) != SANTA_INVALID_INPUT ||
+      output[0] != 77 || output[1] != 77)
+    return 4;
+  if (santa_draw(2, 0, 0, budget, output, 1) != SANTA_INVALID_INPUT ||
+      output[0] != 77 || output[1] != 77)
+    return 5;
+  if (santa_draw(2, 0, 1, budget, output, 2) != SANTA_INVALID_INPUT ||
+      output[0] != 77 || output[1] != 77)
+    return 6;
+  SantaPair self = {0, 0};
+  if (santa_draw(2, &self, 1, budget, output, 2) != SANTA_INVALID_INPUT ||
+      output[0] != 77 || output[1] != 77)
+    return 7;
+  SantaPair impossible[] = {{0, 1}, {1, 0}};
+  if (santa_draw(2, impossible, 2, budget, output, 2) != SANTA_UNSATISFIABLE ||
+      output[0] != 77 || output[1] != 77)
+    return 8;
+  return 0;
 }

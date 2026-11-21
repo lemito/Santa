@@ -66,6 +66,15 @@ int main() {
   CHECK(santa::draw(2, {}, kBudget, random).status == santa::Status::kSuccess);
   CHECK(santa::draw(3, {}, kBudget, random).status == santa::Status::kSuccess);
   CHECK(santa::draw(5, {}, kBudget, random).status == santa::Status::kSuccess);
+  yasl::Vector<santa::Pair> duplicate{{0,1},{0,1}};
+  CHECK(santa::draw(3, duplicate.span(), kBudget, random).status == santa::Status::kSuccess);
+  yasl::Vector<santa::Pair> self{{1,1}};
+  CHECK(santa::draw(3, self.span(), kBudget, random).status == santa::Status::kInvalidInput);
+  yasl::Vector<santa::Pair> directed{{0,1}};
+  auto directed_result = santa::draw(3, directed.span(), kBudget, random);
+  CHECK(directed_result.status == santa::Status::kSuccess);
+  CHECK(santa::valid(3, directed.span(), directed_result.receivers.span()));
+  CHECK(directed_result.receivers[0] != 1);
   yasl::Vector<santa::Pair> bad{{0,4}};
   CHECK(santa::draw(4, bad.span(), kBudget, random).status == santa::Status::kInvalidInput);
   auto tiny = kBudget; tiny.max_memory_bytes = 1;
@@ -116,7 +125,7 @@ int main() {
   // A feasible unique directed cycle: exact counting avoids rejection starvation.
   yasl::Vector<santa::Pair> dense;
   for (uint32 i = 0; i < 10; ++i) for (uint32 j = 0; j < 10; ++j)
-    if (j != (i + 1) % 10) dense.push_back({i,j});
+    if (j != i && j != (i + 1) % 10) dense.push_back({i,j});
   tiny = kBudget; tiny.max_attempts = 1;
   auto dense_result = santa::draw(10, dense.span(), tiny, random);
   CHECK(dense_result.status == santa::Status::kSuccess);

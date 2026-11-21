@@ -74,7 +74,7 @@ Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
   if (n < 2 || n == yasl::max_value<uint32>())
     return {Status::kInvalidInput, {}, {}};
   for (const auto pair : exclusions)
-    if (pair.giver >= n || pair.receiver >= n)
+    if (pair.giver >= n || pair.receiver >= n || pair.giver == pair.receiver)
       return {Status::kInvalidInput, {}, {}};
   // Check before any allocation. Conservative logical working-set estimate;
   // allocator metadata/page rounding is outside this budget.
