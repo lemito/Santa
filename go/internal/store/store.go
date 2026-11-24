@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"santa/go/internal/app"
 	"santa/go/internal/auth"
 	"strings"
 	"time"
@@ -33,9 +34,9 @@ type Snapshot struct {
 	Exclusions   []Exclusion
 }
 
-var ErrNotFound = errors.New("not found")
-var ErrConflict = errors.New("conflict")
-var ErrForbidden = errors.New("forbidden")
+var ErrNotFound = app.ErrNotFound
+var ErrConflict = app.ErrConflict
+var ErrForbidden = app.ErrForbidden
 
 type Store struct{ DB *sql.DB }
 

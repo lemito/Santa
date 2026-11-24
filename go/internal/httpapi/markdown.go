@@ -23,10 +23,9 @@ func safeMarkdown(source string) template.HTML {
 	markdownOnce.Do(func() {
 		p := bluemonday.NewPolicy()
 		p.AllowElements("p", "br", "strong", "em", "del", "code", "pre", "blockquote",
-			"ul", "ol", "li", "h1", "h2", "h3", "h4", "a", "img", "hr",
+			"ul", "ol", "li", "h1", "h2", "h3", "h4", "a", "hr",
 			"table", "thead", "tbody", "tr", "th", "td")
 		p.AllowAttrs("href", "title").OnElements("a")
-		p.AllowAttrs("src", "alt", "title").OnElements("img")
 		p.AllowURLSchemes("http", "https")
 		p.AllowRelativeURLs(false)
 		p.RequireNoFollowOnLinks(true)

@@ -22,6 +22,12 @@ services:
       SANTA_GO_SECURE_COOKIES: "false"
     ports:
       - '127.0.0.1:5080:5080'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:5080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     depends_on:
       db:
         condition: service_healthy

@@ -54,6 +54,12 @@ var (
 	ErrNotFound            = errors.New("not_found")
 	ErrForbidden           = errors.New("forbidden")
 	ErrConflict            = errors.New("configuration_conflict")
+	ErrValidation          = errors.New("validation")
+	ErrUnsatisfiable       = errors.New("unsatisfiable")
+	ErrSearchLimit         = errors.New("search_limit")
+	ErrResourceLimit       = errors.New("resource_limit")
+	ErrCancelled           = errors.New("cancelled")
+	ErrInternal            = errors.New("internal_error")
 	ErrInvalidEngineResult = errors.New("invalid_engine_result")
 )
 
@@ -140,16 +146,16 @@ func (s Service) Publish(ctx context.Context, actor, id uuid.UUID, request Publi
 func statusError(status engine.Status) error {
 	switch status {
 	case engine.Unsatisfiable:
-		return errors.New("unsatisfiable")
+		return ErrUnsatisfiable
 	case engine.SearchLimitExceeded:
-		return errors.New("search_limit")
+		return ErrSearchLimit
 	case engine.ResourceLimitExceeded:
-		return errors.New("resource_limit")
+		return ErrResourceLimit
 	case engine.InvalidInput:
-		return errors.New("invalid_configuration")
+		return fmt.Errorf("%w: invalid_configuration", ErrValidation)
 	case engine.Cancelled:
-		return errors.New("cancelled")
+		return ErrCancelled
 	default:
-		return errors.New("engine_error")
+		return ErrInternal
 	}
 }

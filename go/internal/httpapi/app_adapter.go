@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"github.com/google/uuid"
 	"santa/go/internal/app"
-	"strings"
 )
 
 // AppAdapter exposes the domain service through the HTTP port's string IDs.
@@ -14,20 +14,14 @@ func appError(err error) error {
 	if err == nil {
 		return nil
 	}
-	m := err.Error()
-	if strings.Contains(m, "not found") {
+	switch {
+	case errors.Is(err, app.ErrNotFound):
 		return ErrNotFound
-	}
-	if strings.Contains(m, "forbidden") {
+	case errors.Is(err, app.ErrForbidden):
 		return ErrForbidden
-	}
-	if strings.Contains(m, "conflict") {
+	case errors.Is(err, app.ErrConflict):
 		return ErrConflict
-	}
-	if strings.Contains(m, "invalid") || strings.Contains(m, "unknown account") {
-		return ErrValidation
-	}
-	if strings.Contains(m, "unsatisfiable") || strings.Contains(m, "search_limit") || strings.Contains(m, "resource_limit") {
+	case errors.Is(err, app.ErrValidation), errors.Is(err, app.ErrUnsatisfiable), errors.Is(err, app.ErrSearchLimit), errors.Is(err, app.ErrResourceLimit):
 		return ErrValidation
 	}
 	return err

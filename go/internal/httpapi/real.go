@@ -14,6 +14,8 @@ type SQLAuth struct {
 	Sessions auth.Manager
 }
 
+func (a SQLAuth) SecureCookies() bool { return a.Sessions.Secure }
+
 func (a SQLAuth) Session(r *http.Request) (*Session, error) {
 	s, err := a.Sessions.Current(r.Context(), r)
 	if err != nil {

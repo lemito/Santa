@@ -10,8 +10,8 @@ func TestSafeMarkdownImagesAndXSS(t *testing.T) {
 	if !strings.Contains(html, "<h2>") || !strings.Contains(html, "<strong>готов</strong>") {
 		t.Fatalf("Markdown formatting missing: %s", html)
 	}
-	if !strings.Contains(html, "<img") || !strings.Contains(html, "https://example.test/tree.png") {
-		t.Fatalf("HTTPS image missing: %s", html)
+	if strings.Contains(html, "<img") || strings.Contains(html, "https://example.test/tree.png") {
+		t.Fatalf("remote image survived sanitization: %s", html)
 	}
 	lower := strings.ToLower(html)
 	if strings.Contains(lower, "javascript:") || strings.Contains(lower, "data:") || strings.Contains(lower, "<script") {

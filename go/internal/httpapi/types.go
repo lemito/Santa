@@ -84,6 +84,7 @@ type Server struct {
 	Static    http.Handler
 	Templates *Templates
 	DrawGate  chan struct{}
+	BodyLimit int64
 	Ready     func(context.Context) bool
 }
 type RateLimiter struct {
@@ -92,6 +93,8 @@ type RateLimiter struct {
 	limit  int
 	window time.Duration
 }
+
+const defaultRateLimiterMaxKeys = 10000
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return &RateLimiter{hits: map[string][]time.Time{}, limit: limit, window: window}
@@ -111,6 +114,22 @@ func (r *RateLimiter) Allow(key string) bool {
 	old = old[i:]
 	if len(old) >= r.limit {
 		return false
+	}
+	if _, exists := r.hits[key]; !exists && len(r.hits) >= defaultRateLimiterMaxKeys {
+		var oldestKey string
+		var oldest time.Time
+		for candidate, times := range r.hits {
+			if len(times) == 0 {
+				oldestKey = candidate
+				break
+			}
+			if oldestKey == "" || times[0].Before(oldest) {
+				oldestKey, oldest = candidate, times[0]
+			}
+		}
+		if oldestKey != "" {
+			delete(r.hits, oldestKey)
+		}
 	}
 	r.hits[key] = append(old, now)
 	return true

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -30,20 +31,44 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/actions/create", s.actionCreate)
 	mux.HandleFunc("/actions/", s.actions)
 	mux.HandleFunc("/", s.page)
-	return withBodyLimit(withRequestID(mux))
+	limit := s.BodyLimit
+	if limit <= 0 {
+		limit = 1 << 20
+	}
+	return withBodyLimit(limit)(withRequestID(mux))
 }
-func withBodyLimit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		next.ServeHTTP(w, r)
-	})
+func withBodyLimit(limit int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 func withRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Santa-Backend", "go")
+		requestID := r.Header.Get("X-Request-ID")
+		if !safeRequestID(requestID) {
+			requestID = uuid.NewString()
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
+}
+func safeRequestID(value string) bool {
+	if value == "" || len(value) > 64 {
+		return false
+	}
+	for _, r := range value {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' && r != '.' {
+			return false
+		}
+	}
+	return true
 }
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -153,10 +178,20 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "logout_failed")
 		return
 	}
+	secure := false
+	if provider, ok := s.Auth.(interface{ SecureCookies() bool }); ok {
+		secure = provider.SecureCookies()
+	}
+	clearSessionCookies(w, secure)
 	if wantsJSON(r) {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
 	} else {
 		http.Redirect(w, r, "/", 303)
+	}
+}
+func clearSessionCookies(w http.ResponseWriter, secure bool) {
+	for _, name := range []string{"santa_go_session", "santa_go_csrf"} {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(1, 0), HttpOnly: name == "santa_go_session", Secure: secure, SameSite: http.SameSiteStrictMode})
 	}
 }
 func (s *Server) publish(ctx context.Context, u *User, id string, in PublishRequest) error {
