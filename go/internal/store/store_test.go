@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -39,7 +40,8 @@ func TestPostgresConstraintsAndLifecycle(t *testing.T) {
 	}
 	owner, receiver := uuid.New(), uuid.New()
 	for _, id := range []uuid.UUID{owner, receiver} {
-		if _, err := db.ExecContext(ctx, `INSERT INTO "AspNetUsers" ("Id","Email","NormalizedEmail","DisplayName") VALUES ($1,$2,$2,$3)`, id, id.String()+"@example.test", id.String()); err != nil {
+		email := id.String() + "@example.test"
+		if _, err := db.ExecContext(ctx, `INSERT INTO "AspNetUsers" ("Id","Email","NormalizedEmail","DisplayName") VALUES ($1,$2,$3,$4)`, id, email, strings.ToUpper(email), id.String()); err != nil {
 			t.Fatal(err)
 		}
 	}
