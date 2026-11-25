@@ -1,0 +1,1 @@
+{{define "status"}}<span class="status {{if eq . "Published"}}status-published{{else if eq . "Closed"}}status-closed{{end}}">{{if eq . "Draft"}}Черновик{{else if eq . "Published"}}Идёт{{else}}Завершена{{end}}</span>{{end}}

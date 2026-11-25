@@ -16,5 +16,8 @@ func LoadTemplates(dir string) (*Templates, error) {
 	if err != nil {
 		return nil, err
 	}
+	if t, err = t.ParseGlob(filepath.Join(dir, "partials", "*.html")); err != nil {
+		return nil, err
+	}
 	return &Templates{T: t}, nil
 }
