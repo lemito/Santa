@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"sort"
+	"time"
 )
 
 type Exclusion struct{ First, Second uuid.UUID }
@@ -73,7 +75,10 @@ func ValidateAssignments(in Input, assignments map[uuid.UUID]uuid.UUID) error {
 	return nil
 }
 
-type Native struct{ Budget Budget }
+type Native struct {
+	Budget Budget
+	Logger *zap.Logger
+}
 
 func (n Native) Draw(ctx context.Context, in Input) (Result, error) {
 	if err := validateInput(in); err != nil {
@@ -95,7 +100,22 @@ func (n Native) Draw(ctx context.Context, in Input) (Result, error) {
 	}
 	ids := append([]uuid.UUID(nil), in.Participants...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
-	return nativeDraw(ctx, ids, in.Exclusions, n.Budget)
+	started := time.Now()
+	if n.Logger != nil {
+		n.Logger.Info("assignment_draw_started",
+			zap.Int("participant_count", len(ids)),
+			zap.Int("exclusion_count", len(in.Exclusions)))
+	}
+	result, err := nativeDraw(ctx, ids, in.Exclusions, n.Budget)
+	if n.Logger != nil {
+		n.Logger.Info("assignment_draw_finished",
+			zap.Int("participant_count", len(ids)),
+			zap.Int("exclusion_count", len(in.Exclusions)),
+			zap.String("status", result.Status.String()),
+			zap.Duration("duration", time.Since(started)),
+			zap.Error(err))
+	}
+	return result, err
 }
 
 func DefaultBudget() Budget {

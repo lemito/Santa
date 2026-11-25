@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,37 +12,44 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"santa/go/internal/app"
-	"santa/go/internal/auth"
-	"santa/go/internal/config"
-	"santa/go/internal/engine"
-	"santa/go/internal/httpapi"
-	"santa/go/internal/migrations"
-	appRuntime "santa/go/internal/runtime"
-	"santa/go/internal/store"
+	"github.com/lemito/Santa/go/internal/app"
+	"github.com/lemito/Santa/go/internal/auth"
+	"github.com/lemito/Santa/go/internal/config"
+	"github.com/lemito/Santa/go/internal/engine"
+	"github.com/lemito/Santa/go/internal/httpapi"
+	"github.com/lemito/Santa/go/internal/logging"
+	"github.com/lemito/Santa/go/internal/migrations"
+	appRuntime "github.com/lemito/Santa/go/internal/runtime"
+	"github.com/lemito/Santa/go/internal/store"
+	"go.uber.org/zap"
 )
 
 func main() {
+	logger, err := logging.New()
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = logger.Sync() }()
 	migrate := flag.Bool("migrate", false, "apply database migrations")
 	flag.Parse()
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("config_load_failed", zap.Error(err))
 	}
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL or ConnectionStrings__DefaultConnection is required")
+		logger.Fatal("database_url_missing")
 	}
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("database_open_failed", zap.Error(err))
 	}
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(rootCtx, 10*time.Second)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
-		log.Fatal(err)
+		logger.Fatal("database_ping_failed", zap.Error(err))
 	}
 	if *migrate {
 		dir := filepath.Join("go", "migrations")
@@ -51,7 +57,7 @@ func main() {
 			dir = "migrations"
 		}
 		if err := migrations.Run(ctx, db, dir); err != nil {
-			log.Fatal(err)
+			logger.Fatal("migration_failed", zap.Error(err))
 		}
 		return
 	}
@@ -73,7 +79,7 @@ func main() {
 		}
 	}()
 	appStore := store.AppStore{Store: sqlStore}
-	service := app.Service{Store: appStore, Engine: engine.Native{Budget: engine.DefaultBudget()}}
+	service := app.Service{Store: appStore, Engine: engine.Native{Budget: engine.DefaultBudget(), Logger: logger}, Logger: logger}
 	users := auth.UserStore{DB: db}
 	sessions := auth.Manager{Store: auth.SQLSessionStore{DB: db}, TTL: cfg.SessionTTL, Secure: cfg.SecureCookies}
 	templates, templateErr := httpapi.LoadTemplates(filepath.Join("go", "templates"))
@@ -81,17 +87,17 @@ func main() {
 		templates, templateErr = httpapi.LoadTemplates("templates")
 	}
 	if templateErr != nil || templates == nil {
-		log.Fatalf("load templates: %v", templateErr)
+		logger.Fatal("template_load_failed", zap.Error(templateErr))
 	}
 	staticDir := filepath.Join("go", "static")
 	if _, err := os.Stat(staticDir); err != nil {
 		staticDir = "static"
 	}
-	srv := &httpapi.Server{Static: http.FileServer(http.Dir(staticDir)), Auth: httpapi.SQLAuth{Users: users, Sessions: sessions}, Games: httpapi.AppAdapter{Service: service}, Rate: httpapi.NewRateLimiter(cfg.RateLimit, cfg.RateWindow), Templates: templates, DrawGate: make(chan struct{}, cfg.DrawConcurrency), BodyLimit: int64(cfg.RequestLimit), Ready: func(c context.Context) bool { return db.PingContext(c) == nil }}
-	log.Printf("santa-go listening on %s", cfg.ListenAddr)
+	srv := &httpapi.Server{Static: http.FileServer(http.Dir(staticDir)), Auth: httpapi.SQLAuth{Users: users, Sessions: sessions}, Games: httpapi.AppAdapter{Service: service}, Rate: httpapi.NewRateLimiter(cfg.RateLimit, cfg.RateWindow), Templates: templates, DrawGate: make(chan struct{}, cfg.DrawConcurrency), BodyLimit: int64(cfg.RequestLimit), Ready: func(c context.Context) bool { return db.PingContext(c) == nil }, Logger: logger}
+	logger.Info("santa_go_listening", zap.String("address", cfg.ListenAddr))
 	h := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
 	if err := appRuntime.Run(rootCtx, &httpServer{Server: h}, cfg.ShutdownTimeout); err != nil {
-		log.Fatal(err)
+		logger.Fatal("server_failed", zap.Error(err))
 	}
 	<-cleanupDone
 }

@@ -64,6 +64,39 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run \
 Сначала собирается `build/libsanta_native.so`, затем .NET-проект копирует его в
 серверную сборку и в publish.
 
+## Go library
+
+The standalone assignment package is `santa/go/santa`. It has no HTTP or database
+dependency. Build and install the native library first, then expose its pkg-config
+directory and runtime library to cgo:
+
+```bash
+cmake -S . -B build-go-native -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build-go-native --target santa_native -j 2
+cmake --install build-go-native --prefix /tmp/santa-native
+(cd go && PKG_CONFIG_PATH=/tmp/santa-native/lib/pkgconfig LD_LIBRARY_PATH=/tmp/santa-native/lib go test ./...)
+```
+
+The native ABI returns `Unsatisfiable` only for a proven impossible graph. Search,
+resource, and cancellation outcomes remain distinct. The Go package accepts UUID
+participants and pair exclusions; connected pairs do not receive transitive
+closure. Explicit exclusion groups are not part of the current library API.
+
+## Logging
+
+The Go service emits structured JSON through `go.uber.org/zap`. Set `LOG_LEVEL`
+to a zap level such as `info`, `warn`, or `debug`. Request logs include the
+request ID, method, path, status, byte count, and duration. Publish logs include
+the actor and game UUIDs, configuration version, status, and duration; passwords,
+CSRF values, request keys, seeds, messages, and complete assignments are never
+logged.
+
+The native C++ adapter can emit diagnostic lines through YASL's
+`yasl::io::err()` without adding a logging dependency. Set
+`SANTA_NATIVE_LOG=1` to enable start/finish records containing only snapshot
+sizes, budgets, status, attempts, and duration. Native C++ receives dense
+snapshot-local indices, so it cannot log external participant identities.
+
 ## Проверки
 
 Для полного локального прогона нужна отдельная тестовая база PostgreSQL:

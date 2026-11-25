@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"santa/go/internal/engine"
+	"github.com/lemito/Santa/go/internal/engine"
+	"go.uber.org/zap"
+	"time"
 )
 
 type GameState string
@@ -83,6 +85,7 @@ type Store interface {
 type Service struct {
 	Store  Store
 	Engine engine.Engine
+	Logger *zap.Logger
 }
 
 func (s Service) Create(ctx context.Context, actor uuid.UUID, title string) (uuid.UUID, error) {
@@ -123,24 +126,62 @@ func (s Service) MessageFromSanta(ctx context.Context, actor, id uuid.UUID) (Mes
 }
 
 func (s Service) Publish(ctx context.Context, actor, id uuid.UUID, request PublishInput) error {
+	started := time.Now()
+	finish := func(status string, err error) {
+		if s.Logger == nil {
+			return
+		}
+		fields := []zap.Field{
+			zap.String("actor_id", actor.String()),
+			zap.String("game_id", id.String()),
+			zap.Int64("configuration_version", request.Version),
+			zap.String("status", status),
+			zap.Duration("duration", time.Since(started)),
+			zap.Error(err),
+		}
+		if err != nil {
+			s.Logger.Warn("game_publish_finished", fields...)
+		} else {
+			s.Logger.Info("game_publish_finished", fields...)
+		}
+	}
 	if request.RequestKey == uuid.Nil {
-		return fmt.Errorf("invalid_request_key")
+		err := fmt.Errorf("invalid_request_key")
+		finish("invalid_request", err)
+		return err
+	}
+	if s.Logger != nil {
+		s.Logger.Info("game_publish_started",
+			zap.String("actor_id", actor.String()),
+			zap.String("game_id", id.String()),
+			zap.Int64("configuration_version", request.Version))
 	}
 	snapshot, err := s.Store.Capture(ctx, actor, id, request)
 	if err != nil || snapshot == nil {
+		finish("capture_failed", err)
 		return err
 	}
 	result, err := s.Engine.Draw(ctx, snapshot.Input)
 	if err != nil {
+		finish("engine_error", err)
 		return err
 	}
 	if result.Status != engine.Success {
-		return statusError(result.Status)
+		err := statusError(result.Status)
+		finish(result.Status.String(), err)
+		return err
 	}
 	if err := engine.ValidateAssignments(snapshot.Input, result.Assignments); err != nil {
+		finish("invalid_engine_result", ErrInvalidEngineResult)
 		return ErrInvalidEngineResult
 	}
-	return s.Store.Commit(ctx, actor, request, *snapshot, result.Assignments)
+	err = s.Store.Commit(ctx, actor, request, *snapshot, result.Assignments)
+	if err != nil {
+		finish("commit_failed", err)
+		return err
+	}
+	finish("published", nil)
+	return nil
 }
 
 func statusError(status engine.Status) error {

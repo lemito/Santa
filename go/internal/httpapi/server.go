@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 func (s *Server) Handler() http.Handler {
@@ -35,7 +36,7 @@ func (s *Server) Handler() http.Handler {
 	if limit <= 0 {
 		limit = 1 << 20
 	}
-	return withBodyLimit(limit)(withRequestID(mux))
+	return withBodyLimit(limit)(withRequestID(s.Logger, mux))
 }
 func withBodyLimit(limit int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -49,8 +50,40 @@ func withBodyLimit(limit int64) func(http.Handler) http.Handler {
 		})
 	}
 }
-func withRequestID(next http.Handler) http.Handler {
+
+type requestIDContextKey struct{}
+
+func requestIDFromContext(ctx context.Context) string {
+	value, _ := ctx.Value(requestIDContextKey{}).(string)
+	return value
+}
+
+type responseRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *responseRecorder) WriteHeader(status int) {
+	if w.status != 0 {
+		return
+	}
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseRecorder) Write(data []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	n, err := w.ResponseWriter.Write(data)
+	w.bytes += n
+	return n, err
+}
+
+func withRequestID(logger *zap.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Santa-Backend", "go")
 		requestID := r.Header.Get("X-Request-ID")
@@ -60,7 +93,22 @@ func withRequestID(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", requestID)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		next.ServeHTTP(w, r)
+		r = r.WithContext(context.WithValue(r.Context(), requestIDContextKey{}, requestID))
+		recorder := &responseRecorder{ResponseWriter: w}
+		next.ServeHTTP(recorder, r)
+		if logger != nil {
+			status := recorder.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			logger.Info("http_request",
+				zap.String("request_id", requestID),
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+				zap.Int("status", status),
+				zap.Int("bytes", recorder.bytes),
+				zap.Duration("duration", time.Since(started)))
+		}
 	})
 }
 func safeRequestID(value string) bool {

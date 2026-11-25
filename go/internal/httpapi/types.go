@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type User struct {
@@ -86,6 +88,7 @@ type Server struct {
 	DrawGate  chan struct{}
 	BodyLimit int64
 	Ready     func(context.Context) bool
+	Logger    *zap.Logger
 }
 type RateLimiter struct {
 	mu     sync.Mutex
