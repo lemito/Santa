@@ -1,0 +1,10 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: santa_native
+Description: Secret Santa native assignment engine C ABI
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lsanta_native
+Cflags: -I${includedir}

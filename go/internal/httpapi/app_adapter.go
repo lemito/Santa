@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
-	"santa/go/internal/app"
+	"github.com/lemito/Santa/go/internal/app"
 )
 
 // AppAdapter exposes the domain service through the HTTP port's string IDs.

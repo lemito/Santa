@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"santa/go/internal/app"
-	"santa/go/internal/auth"
+	"github.com/lemito/Santa/go/internal/app"
+	"github.com/lemito/Santa/go/internal/auth"
 	"strings"
 	"time"
 )

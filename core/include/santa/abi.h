@@ -11,7 +11,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* v1: cdecl, fixed-width integers, natural alignment, caller-owned buffers.
+#define SANTA_ABI_VERSION 2
+/* v1 santa_draw remains available. v2 adds santa_draw_ex cancellation.
+   cdecl, fixed-width integers, natural alignment, caller-owned buffers.
    Pairs are DIRECTED; adapters expand symmetric exclusions to both directions.
    No pointers retained. Calls are independent and thread-safe. Output untouched
    unless Success. All lengths are element counts, not bytes. Inputs/output must
@@ -25,6 +27,9 @@ typedef struct SantaBudget {
   uint64_t max_work;
   uint64_t max_memory_bytes;
 } SantaBudget;
+typedef struct SantaCancellation {
+  uint32_t* flag;
+} SantaCancellation;
 enum SantaStatus {
   SANTA_SUCCESS = 0,
   SANTA_INVALID_INPUT = 1,
@@ -38,6 +43,10 @@ SANTA_API uint32_t SANTA_CALL santa_abi_version(void);
 SANTA_API int32_t SANTA_CALL santa_draw(uint32_t n, const SantaPair* pairs,
                                         uint64_t pair_count, SantaBudget budget,
                                         uint32_t* output, uint64_t output_count);
+SANTA_API int32_t SANTA_CALL santa_draw_ex(uint32_t n, const SantaPair* pairs,
+                                           uint64_t pair_count, SantaBudget budget,
+                                           const SantaCancellation* cancellation,
+                                           uint32_t* output, uint64_t output_count);
 #ifdef __cplusplus
 }
 #endif

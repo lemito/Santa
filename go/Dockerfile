@@ -1,13 +1,15 @@
 FROM golang:1.23-bookworm AS build
-RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make pkg-config && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY CMakeLists.txt ./CMakeLists.txt
+COPY cmake ./cmake
 COPY core ./core
 COPY third_party/yasl ./third_party/yasl
 RUN cmake -S . -B /src/build -DCMAKE_BUILD_TYPE=Release && cmake --build /src/build --target santa_native
+RUN cmake --install /src/build --prefix /usr/local
 COPY go ./go
 WORKDIR /src/go
-RUN CGO_ENABLED=1 go build -o /out/santa-go ./cmd/santa-go
+RUN PKG_CONFIG_PATH=/usr/local/lib/pkgconfig CGO_ENABLED=1 go build -o /out/santa-go ./cmd/santa-go
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 ca-certificates tzdata wget && rm -rf /var/lib/apt/lists/* \
     && groupadd --system santa \

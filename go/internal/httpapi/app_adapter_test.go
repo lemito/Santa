@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"santa/go/internal/app"
+	"github.com/lemito/Santa/go/internal/app"
 )
 
 func TestAppErrorUsesTypedErrors(t *testing.T) {

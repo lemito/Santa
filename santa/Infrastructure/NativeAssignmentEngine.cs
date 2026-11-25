@@ -5,6 +5,7 @@ namespace santa.Infrastructure;
 
 public sealed class NativeAssignmentEngine : IAssignmentEngine
 {
+    private const uint AbiVersion = 2;
     [StructLayout(LayoutKind.Sequential)]
     private readonly record struct Pair(uint Giver, uint Receiver);
     [StructLayout(LayoutKind.Sequential)]
@@ -29,7 +30,7 @@ public sealed class NativeAssignmentEngine : IAssignmentEngine
                 return new(EngineStatus.InvalidInput);
             pairs.Add(new(a, b)); pairs.Add(new(b, a));
         }
-        if (santa_abi_version() != 1) throw new InvalidOperationException("Unsupported Santa ABI");
+        if (santa_abi_version() != AbiVersion) throw new InvalidOperationException("Unsupported Santa ABI");
         var normalized = pairs.Distinct().ToArray();
         var output = new uint[input.Participants.Length];
         var status = (EngineStatus)santa_draw(checked((uint)output.Length), normalized,

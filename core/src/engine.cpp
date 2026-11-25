@@ -1,7 +1,4 @@
 #include <santa/engine.h>
-#include <sys/random.h>
-
-#include <cerrno>
 
 #include <yasl/core/bits.h>
 #include <yasl/core/exception.h>
@@ -10,16 +7,19 @@
 namespace santa {
 namespace {
 struct Limit {};
+struct Cancelled {};
 class Work {
  public:
-  explicit Work(uint64 count) : left_(count) {}
+  Work(uint64 count, ICancel* cancel) : left_(count), cancel_(cancel) {}
   void use(uint64 amount = 1) {
+    if (cancel_ && cancel_->cancelled()) throw Cancelled{};
     if (amount > left_) throw Limit{};
     left_ -= amount;
   }
 
  private:
   uint64 left_;
+  ICancel* cancel_;
 };
 uint64 bounded(IRandom& random, uint64 bound, Work& work) {
   const auto threshold = (uint64{0} - bound) % bound;
@@ -30,18 +30,6 @@ uint64 bounded(IRandom& random, uint64 bound, Work& work) {
   }
 }
 }  // namespace
-uint64 OsRandom::next() {
-  uint64 value;
-  auto* bytes = reinterpret_cast<unsigned char*>(&value);
-  size_t done = 0;
-  while (done < sizeof(value)) {
-    const auto read = getrandom(bytes + done, sizeof(value) - done, 0);
-    if (read < 0 && errno == EINTR) continue;
-    if (read <= 0) throw yasl::Exception("OS random source failed");
-    done += static_cast<size_t>(read);
-  }
-  return value;
-}
 yasl::Vector<Pair> symmetric(yasl::Span<const Pair> pairs) {
   yasl::Vector<Pair> result;
   if (pairs.size() > result.max_size() / 2)
@@ -63,14 +51,14 @@ bool valid(uint32 n, yasl::Span<const Pair> exclusions,
     seen[r] = 1;
   }
   for (const auto pair : exclusions) {
-    if (pair.giver >= n || pair.receiver >= n ||
+    if (pair.giver >= n || pair.receiver >= n || pair.giver == pair.receiver ||
         receivers[pair.giver] == pair.receiver)
       return false;
   }
   return true;
 }
 Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
-            IRandom& random) {
+            IRandom& random, ICancel* cancel) {
   if (n < 2 || n == yasl::max_value<uint32>())
     return {Status::kInvalidInput, {}, {}};
   for (const auto pair : exclusions)
@@ -84,7 +72,7 @@ Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
       overhead > budget.max_memory_bytes ||
       cells > budget.max_memory_bytes - overhead)
     return {Status::kResourceLimitExceeded, {}, {}};
-  Work work(budget.max_work);
+  Work work(budget.max_work, cancel);
   try {
     work.use(cells);
     work.use(exclusions.size());
@@ -140,12 +128,9 @@ Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
       }
     }
     if (budget.max_attempts == 0) return {Status::kSearchLimitExceeded, {}, {}};
-    // Dense small games make rejection impractical. Count completions exactly
-    // and unrank one uniform integer instead. 20! fits uint64; 21! does not.
-    uint64 blocked = 0;
-    for (size_t i = 0; i < forbidden.size(); ++i)
-      blocked += forbidden[i] == uint8{1};
-    if (n <= 20 && blocked - n > uint64{n} * (n - 1) / 4) {
+    // Small games can count completions exactly and unrank one uniform integer.
+    // 20! fits uint64; 21! does not.
+    if (n <= 20) {
       const uint32 states = uint32{1} << n;
       const uint64 table_bytes = uint64{states} * sizeof(uint64);
       if (table_bytes <= budget.max_memory_bytes - overhead - cells) {
@@ -168,6 +153,8 @@ Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
         // Reserve the entire worst-case unranking cost BEFORE drawing a rank:
         // a budget cutoff depending on that rank would bias successful results.
         work.use(uint64{n} * n);
+        if (counts[states - 1] == 0)
+          return {Status::kInternalError, {}, {}};
         auto rank = bounded(random, counts[states - 1], work);
         auto mask = states - 1;
         yasl::Vector<uint32> receivers(n);
@@ -206,6 +193,8 @@ Result draw(uint32 n, yasl::Span<const Pair> exclusions, Budget budget,
     return {Status::kSearchLimitExceeded, {}, {}, budget.max_attempts};
   } catch (const Limit&) {
     return {Status::kSearchLimitExceeded, {}, {}};
+  } catch (const Cancelled&) {
+    return {Status::kCancelled, {}, {}};
   }
 }
 }  // namespace santa

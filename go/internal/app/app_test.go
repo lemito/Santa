@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"github.com/google/uuid"
-	"santa/go/internal/engine"
+	"github.com/lemito/Santa/go/internal/engine"
 	"testing"
 )
 

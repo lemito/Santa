@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"santa/go/internal/auth"
+	"github.com/lemito/Santa/go/internal/auth"
 )
 
 // SQLAuth bridges the PostgreSQL Identity/session ports to the HTTP contract.

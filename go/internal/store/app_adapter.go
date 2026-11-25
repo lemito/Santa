@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"github.com/google/uuid"
-	"santa/go/internal/app"
-	"santa/go/internal/engine"
+	"github.com/lemito/Santa/go/internal/app"
+	"github.com/lemito/Santa/go/internal/engine"
 )
 
 // AppStore adapts the SQL store to the application port.

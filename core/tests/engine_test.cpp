@@ -1,3 +1,4 @@
+#include <santa/abi.h>
 #include <santa/engine.h>
 #include <algorithm>
 #include <chrono>
@@ -12,7 +13,32 @@ struct Random : santa::IRandom {
   std::mt19937_64 generator{42};
   uint64 next() override { return generator(); }
 };
-constexpr SantaBudget kBudget{100000, 100000000, 128 * 1024 * 1024};
+struct MaxRandom : santa::IRandom {
+  uint64 calls = 0;
+  uint64 next() override {
+    ++calls;
+    return yasl::max_value<uint64>();
+  }
+};
+void valid_rejects_invalid_exclusion() {
+  const yasl::Vector<uint32> receivers{1, 0};
+  const yasl::Vector<santa::Pair> self{{0, 0}};
+  CHECK(!santa::valid(2, self.span(), receivers.span()));
+
+  const yasl::Vector<santa::Pair> out_of_range{{0, 2}};
+  CHECK(!santa::valid(2, out_of_range.span(), receivers.span()));
+}
+void exact_sampler_ignores_density_heuristic() {
+  MaxRandom random;
+  const yasl::Vector<santa::Pair> exclusions{{0, 1}};
+  santa::Budget budget{1, 100000000, 128 * 1024 * 1024};
+  const auto result = santa::draw(20, exclusions.span(), budget, random);
+  CHECK(result.status == santa::Status::kSuccess);
+  CHECK(random.calls == 1);
+  CHECK(santa::valid(20, exclusions.span(), result.receivers.span()));
+}
+constexpr santa::Budget kBudget{100000, 100000000, 128 * 1024 * 1024};
+constexpr SantaBudget kAbiBudget{100000, 100000000, 128 * 1024 * 1024};
 bool brute(uint32 n, const yasl::Vector<santa::Pair>& pairs) {
   yasl::Vector<uint32> p(n);
   for (uint32 i = 0; i < n; ++i) p[i] = i;
@@ -62,6 +88,8 @@ struct Choices : santa::IRandom {
 };
 int main() {
   Random random;
+  valid_rejects_invalid_exclusion();
+  exact_sampler_ignores_density_heuristic();
   for (auto n : {0u, 1u}) CHECK(santa::draw(n, {}, kBudget, random).status == santa::Status::kInvalidInput);
   CHECK(santa::draw(2, {}, kBudget, random).status == santa::Status::kSuccess);
   CHECK(santa::draw(3, {}, kBudget, random).status == santa::Status::kSuccess);
@@ -83,37 +111,22 @@ int main() {
   CHECK(santa::draw(4, {}, tiny, random).status == santa::Status::kSearchLimitExceeded);
   for (uint32 n = 2; n <= 4; ++n) exhaustive(n, false);
   exhaustive(5, true);
-  std::set<std::vector<uint32>> all, accepted;
   const yasl::Vector<santa::Pair> pair{{0,1}};
   const auto exclusions = santa::symmetric(pair.span());
   const yasl::Vector<uint32> example{2,3,0,1};
   CHECK(santa::valid(4, exclusions.span(), example.span()));
-  for (uint64 a = 0; a < 4; ++a) for (uint64 b = 0; b < 3; ++b) for (uint64 c = 0; c < 2; ++c) {
-    Choices choices; choices.values[0] = a; choices.values[1] = b + 3; choices.values[2] = c;
-    auto budget = kBudget; budget.max_attempts = 1;
-    auto result = santa::draw(4, exclusions.span(), budget, choices);
-    CHECK(choices.pos == 3);
-    if (result.status == santa::Status::kSuccess) {
-      CHECK(santa::valid(4, exclusions.span(), result.receivers.span()));
-      CHECK(accepted.insert({result.receivers.begin(), result.receivers.end()}).second);
-    } else CHECK(result.status == santa::Status::kSearchLimitExceeded);
-  }
-  yasl::Vector<uint32> p{0,1,2,3};
-  do { if (santa::valid(4, exclusions.span(), p.span())) all.insert({p.begin(),p.end()}); }
-  while (std::next_permutation(p.begin(),p.end()));
-  CHECK(accepted == all);
   // ABI boundary, untouched output on errors, duplicates and directed semantics.
   uint32 out[]{99,99,99,99};
-  CHECK(santa_abi_version() == 1);
-  CHECK(santa_draw(4, nullptr, 1, kBudget, out, 4) == SANTA_INVALID_INPUT);
-  CHECK(santa_draw(4, nullptr, 0, kBudget, out, 3) == SANTA_INVALID_INPUT);
+  CHECK(santa_abi_version() == SANTA_ABI_VERSION);
+  CHECK(santa_draw(4, nullptr, 1, kAbiBudget, out, 4) == SANTA_INVALID_INPUT);
+  CHECK(santa_draw(4, nullptr, 0, kAbiBudget, out, 3) == SANTA_INVALID_INPUT);
   CHECK(out[0] == 99);
   {
     yasl::mem::ScopedDefault fail_allocations(yasl::mem::null_resource());
-    CHECK(santa_draw(4, nullptr, 0, kBudget, out, 4) == SANTA_RESOURCE_LIMIT_EXCEEDED);
+    CHECK(santa_draw(4, nullptr, 0, kAbiBudget, out, 4) == SANTA_RESOURCE_LIMIT_EXCEEDED);
     CHECK(out[0] == 99);
   }
-  CHECK(santa_draw(4, nullptr, 0, kBudget, out, 4) == SANTA_SUCCESS);
+  CHECK(santa_draw(4, nullptr, 0, kAbiBudget, out, 4) == SANTA_SUCCESS);
   for (uint32 n : {10u, 100u, 1000u}) {
     auto start = std::chrono::steady_clock::now();
     const auto result = santa::draw(n, {}, kBudget, random);

@@ -8,39 +8,6 @@ import (
 	"sort"
 )
 
-type Status int
-
-const (
-	Success Status = iota
-	InvalidInput
-	Unsatisfiable
-	SearchLimitExceeded
-	Cancelled
-	InternalError
-	ResourceLimitExceeded
-)
-
-func (s Status) String() string {
-	switch s {
-	case Success:
-		return "success"
-	case InvalidInput:
-		return "invalid_input"
-	case Unsatisfiable:
-		return "unsatisfiable"
-	case SearchLimitExceeded:
-		return "search_limit"
-	case Cancelled:
-		return "cancelled"
-	case InternalError:
-		return "internal_error"
-	case ResourceLimitExceeded:
-		return "resource_limit"
-	default:
-		return "unknown"
-	}
-}
-
 type Exclusion struct{ First, Second uuid.UUID }
 type Input struct {
 	Participants []uuid.UUID
@@ -56,7 +23,10 @@ type Engine interface {
 	Draw(context.Context, Input) (Result, error)
 }
 
-var ErrInvalidResult = errors.New("invalid engine result")
+var (
+	ErrInvalidResult       = errors.New("invalid engine result")
+	ErrUnsupportedPlatform = errors.New("native engine requires linux cgo")
+)
 
 // ValidateAssignments checks the native result independently of the engine.
 func ValidateAssignments(in Input, assignments map[uuid.UUID]uuid.UUID) error {
@@ -114,8 +84,14 @@ func (n Native) Draw(ctx context.Context, in Input) (Result, error) {
 		return Result{Status: Cancelled}, ctx.Err()
 	default:
 	}
-	if n.Budget.MaxAttempts == 0 {
+	if n.Budget == (Budget{}) {
 		n.Budget = DefaultBudget()
+	}
+	if uint64(len(in.Participants)) > uint64(^uint32(0)) {
+		return Result{Status: ResourceLimitExceeded}, fmt.Errorf("too many participants")
+	}
+	if len(in.Exclusions) > int(^uint(0)>>1)/2 {
+		return Result{Status: ResourceLimitExceeded}, fmt.Errorf("too many exclusions")
 	}
 	ids := append([]uuid.UUID(nil), in.Participants...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i].String() < ids[j].String() })
